@@ -1,0 +1,31 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/ai_assembler/ai_assembler_dock.gd" id="1"]
+
+[node name="AIAssemblerDock" type="VBoxContainer"]
+script = ExtResource("1")
+theme_override_constants/separation = 8
+
+[node name="TitleLabel" type="Label" parent="."]
+text = "AI Assembler"
+
+[node name="PromptTextEdit" type="TextEdit" parent="."]
+custom_minimum_size = Vector2(0, 180)
+placeholder_text = "Describe the scene, composition, palette, and shape style you want."
+
+[node name="ProviderOptionButton" type="OptionButton" parent="."]
+
+[node name="ApiKeyLineEdit" type="LineEdit" parent="."]
+placeholder_text = "OpenAI or Gemini API key"
+secret = true
+clear_button_enabled = true
+
+[node name="GenerateButton" type="Button" parent="."]
+text = "Generate"
+
+[node name="StatusLabel" type="Label" parent="."]
+text = "Ready."
+
+[node name="GenerateRequest" type="HTTPRequest" parent="."]
+use_threads = true
+timeout = 60.0
