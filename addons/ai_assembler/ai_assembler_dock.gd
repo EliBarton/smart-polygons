@@ -7,6 +7,9 @@ const OPENAI_ENDPOINT := "https://api.openai.com/v1/chat/completions"
 const OPENAI_MODEL := "gpt-5.4-mini"
 const GEMINI_MODEL := "gemini-3.5-flash"
 const GENERATED_CONTAINER_NAME := "AI_Generated_Shapes"
+const API_KEY_CONFIG_PATH := "user://ai_assembler.cfg"
+const API_KEY_CONFIG_SECTION := "credentials"
+const API_KEY_CONFIG_KEY := "api_key"
 const SHAPE_RECTANGLE := 0
 const SHAPE_CIRCLE := 1
 const SHAPE_STAR := 2
@@ -48,6 +51,7 @@ func set_scene_root(value: Node) -> void:
 func _ready() -> void:
 	# Configure the dock controls once the scene is live so the plugin can safely reuse the scene at any time.
 	_configure_ui()
+	_load_api_key()
 	_wire_signals()
 	_update_scene_state()
 
@@ -102,6 +106,9 @@ func _wire_signals() -> void:
 	if not generate_request.request_completed.is_connected(_on_request_completed):
 		generate_request.request_completed.connect(_on_request_completed)
 
+	if not api_key_line_edit.text_changed.is_connected(_on_api_key_text_changed):
+		api_key_line_edit.text_changed.connect(_on_api_key_text_changed)
+
 
 func _on_generate_button_pressed() -> void:
 	if editor_interface == null:
@@ -154,6 +161,28 @@ func _on_generate_button_pressed() -> void:
 		_set_status("Failed to start request: %s" % error_string(error))
 
 
+func _load_api_key() -> void:
+	var config := ConfigFile.new()
+	var error := config.load(API_KEY_CONFIG_PATH)
+	if error != OK:
+		return
+
+	var stored_key := str(config.get_value(API_KEY_CONFIG_SECTION, API_KEY_CONFIG_KEY, ""))
+	api_key_line_edit.text = stored_key
+
+
+func _save_api_key(api_key: String) -> void:
+	var config := ConfigFile.new()
+	config.set_value(API_KEY_CONFIG_SECTION, API_KEY_CONFIG_KEY, api_key)
+	var error := config.save(API_KEY_CONFIG_PATH)
+	if error != OK:
+		push_warning("Failed to save the AI Assembler API key: %s" % error_string(error))
+
+
+func _on_api_key_text_changed(new_text: String) -> void:
+	_save_api_key(new_text)
+
+
 func _on_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	_request_in_flight = false
 	_update_scene_state()
@@ -193,26 +222,25 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		_set_status("The schema contained no nodes to build.")
 		return
 
-	var filtered_node_specs := _filter_subject_nodes(node_specs, _last_user_prompt)
-	var shape_constraints_applied := _apply_prompt_shape_constraints(filtered_node_specs, _last_user_prompt)
-	var blind_pose_applied := _apply_humanoid_blind_pose(filtered_node_specs, _last_user_prompt)
-	var pivot_constraints_applied := _apply_humanoid_pivot_offsets(filtered_node_specs, _last_user_prompt)
-	node_specs = filtered_node_specs
+	node_specs = _filter_subject_nodes(node_specs, _last_user_prompt)
 
 	if editor_interface.get_edited_scene_root() == null:
 		_set_status("Open or create a scene before applying generated nodes.")
 		return
 
+	var generated_container := _create_generated_content(node_specs, GENERATED_CONTAINER_NAME)
+	if generated_container == null:
+		_set_status("Failed to build the generated node tree.")
+		return
+
+	var previous_container: Node2D = _generated_container if is_instance_valid(_generated_container) else null
 	var undo_redo = editor_interface.get_editor_undo_redo()
 	undo_redo.create_action("Generate Smart Polygon Shapes")
-	undo_redo.add_do_method(self, "_build_generated_content", node_specs.duplicate(true), GENERATED_CONTAINER_NAME)
-	undo_redo.add_undo_method(self, "_clear_generated_content")
+	undo_redo.add_do_method(self, "_apply_generated_content", previous_container, generated_container)
+	undo_redo.add_undo_method(self, "_restore_generated_content", previous_container, generated_container)
 	undo_redo.commit_action()
 
-	if shape_constraints_applied or blind_pose_applied or pivot_constraints_applied:
-		_set_status("Generated %d node(s) with subject-only shape and pose overrides." % node_specs.size())
-	else:
-		_set_status("Generated %d node(s) into the edited scene." % node_specs.size())
+	_set_status("Generated %d node(s) into the edited scene." % node_specs.size())
 
 
 func _build_openai_request_body(user_text: String) -> String:
@@ -223,7 +251,7 @@ func _build_openai_request_body(user_text: String) -> String:
 		"messages": [
 			{
 				"role": "system",
-				"content": "You are a strict JSON generator for a Godot 4 editor plugin. Always follow the user instructions exactly."
+				"content": "You are a strict JSON generator for a Godot 4 editor plugin. Always follow the user instructions exactly. Do not rely on downstream correction; output the final layout, pose, pivots, and shapes directly in JSON."
 			},
 			{
 				"role": "user",
@@ -305,12 +333,19 @@ Rules:
 - Use capsules for limbs, connectors, beams, pipes, bodies, and other elongated forms.
 - Use triangles for arrows, spikes, mountains, roofs, shards, and directional accents.
 - Do not use stars unless the prompt explicitly asks for stars or decorative star-like details.
+- For humanoid or bipedal characters, build a strict blind pose in the JSON itself instead of relying on editor-side corrections.
+- Place the torso centered on the character's root.
+- Place the head above the torso.
+- Place arms horizontally from the shoulders in a true T-pose unless the prompt explicitly asks for a different pose.
+- Place legs vertically beneath the hips, with feet aligned to the lower ends of the legs.
 - For limbs and articulated parts, set pivot_offset so the joint stays anchored while the geometry extends away from the body.
 - When pivot_offset is used, keep pos_x and pos_y at the actual joint or attachment point. Do not also shift position by half the shape size to compensate for pivot_offset.
 - For capsule limbs, a common pivot_offset is [size_x / 2, 0] for left-facing parts and [-size_x / 2, 0] for right-facing parts.
 - For vertical leg segments, a common pivot_offset is [0, -size_y / 2] so the joint sits at the top edge.
+- The editor plugin does not apply humanoid pose correction after generation, so the JSON must already contain the final layout.
 - For multi-node subjects, keep the node set focused on the subject anatomy or object parts only.
 - Prefer more complex shapes when they improve the composition, especially capsules and triangles.
+- Use triangles for spikes, arrows, accents, and details that would be difficult to achieve with circles or rectangles, especially when conveying sharp points.
 
 User prompt:
 %s
@@ -418,7 +453,7 @@ func _filter_subject_nodes(node_specs: Array[Dictionary], user_prompt: String) -
 
 	for node_spec in node_specs:
 		var node_name := str(node_spec.get("name", "")).to_lower()
-		if _is_environment_node(node_name, _is_humanoid_prompt(prompt_text)):
+		if _is_environment_node(node_name):
 			continue
 
 		if not wants_star_details and _contains_any(node_name, ["star", "burst", "spark", "badge", "accent", "ornament", "asterisk"]):
@@ -432,249 +467,10 @@ func _filter_subject_nodes(node_specs: Array[Dictionary], user_prompt: String) -
 	return filtered
 
 
-func _apply_humanoid_pivot_offsets(node_specs: Array[Dictionary], user_prompt: String) -> bool:
-	var prompt_text := user_prompt.strip_edges().to_lower()
-	if not _is_humanoid_prompt(prompt_text):
-		return false
-
-	var applied := false
-
-	for index in range(node_specs.size()):
-		var node_spec := node_specs[index]
-		var node_name := str(node_spec.get("name", "")).to_lower()
-		var node_size := _vector2_from_value(node_spec.get("size", Vector2(128.0, 128.0)), Vector2(128.0, 128.0))
-		var pivot_offset := _vector2_from_value(node_spec.get("pivot_offset", Vector2.ZERO), Vector2.ZERO)
-		var has_custom_pivot := pivot_offset.length() > 0.0001
-
-		if has_custom_pivot:
-			node_specs[index] = node_spec
-			continue
-
-		if _is_arm_node(node_name):
-			var arm_side := _node_side(node_name, index)
-			if abs(node_size.x) >= abs(node_size.y):
-				pivot_offset = Vector2(abs(node_size.x) * 0.5 if arm_side == "left" else -abs(node_size.x) * 0.5 if arm_side == "right" else 0.0, 0.0)
-			else:
-				pivot_offset = Vector2(0.0, -abs(node_size.y) * 0.5)
-			applied = true
-		elif _is_leg_node(node_name):
-			if abs(node_size.y) >= abs(node_size.x):
-				pivot_offset = Vector2(0.0, -abs(node_size.y) * 0.5)
-			else:
-				var leg_side := _node_side(node_name, index)
-				pivot_offset = Vector2(abs(node_size.x) * 0.5 if leg_side == "left" else -abs(node_size.x) * 0.5 if leg_side == "right" else 0.0, 0.0)
-			applied = true
-		elif _is_foot_node(node_name):
-			var foot_side := _node_side(node_name, index)
-			pivot_offset = Vector2(abs(node_size.x) * 0.5 if foot_side == "left" else -abs(node_size.x) * 0.5 if foot_side == "right" else 0.0, 0.0)
-			applied = true
-		elif _is_torso_node(node_name):
-			pivot_offset = Vector2.ZERO
-
-		if node_spec.get("pivot_offset", Vector2.ZERO) != pivot_offset:
-			node_spec["pivot_offset"] = pivot_offset
-			applied = true
-
-		node_specs[index] = node_spec
-
-	return applied
-
-
-func _apply_humanoid_blind_pose(node_specs: Array[Dictionary], user_prompt: String) -> bool:
-	var prompt_text := user_prompt.strip_edges().to_lower()
-	if not _is_humanoid_prompt(prompt_text):
-		return false
-
-	var head_diameter := _largest_dimension_for_keywords(node_specs, ["head", "skull", "face"], 64.0)
-	var torso_length := _largest_dimension_for_keywords(node_specs, ["torso", "body", "chest", "spine", "waist", "hip", "neck"], 96.0)
-	var torso_thickness := _smallest_dimension_for_keywords(node_specs, ["torso", "body", "chest", "spine", "waist", "hip", "neck"], 28.0)
-	var arm_length := _largest_dimension_for_keywords(node_specs, ["arm", "hand", "shoulder", "elbow", "wrist"], 72.0)
-	var arm_thickness := _smallest_dimension_for_keywords(node_specs, ["arm", "hand", "shoulder", "elbow", "wrist"], 14.0)
-	var leg_length := _largest_dimension_for_keywords(node_specs, ["leg", "thigh", "calf", "knee", "ankle", "foot"], 84.0)
-	var leg_thickness := _smallest_dimension_for_keywords(node_specs, ["leg", "thigh", "calf", "knee", "ankle", "foot"], 16.0)
-
-	head_diameter = maxf(head_diameter, 32.0)
-	torso_length = maxf(torso_length, 64.0)
-	torso_thickness = maxf(minf(torso_thickness, torso_length * 0.35), 18.0)
-	arm_length = maxf(arm_length, 48.0)
-	arm_thickness = maxf(minf(arm_thickness, arm_length * 0.25), 8.0)
-	leg_length = maxf(leg_length, 56.0)
-	leg_thickness = maxf(minf(leg_thickness, leg_length * 0.25), 8.0)
-
-	var head_center := Vector2(0.0, -(torso_length * 0.75 + head_diameter * 0.5))
-	var torso_center := Vector2.ZERO
-	var shoulder_y := -(torso_length * 0.25)
-	var hip_y := torso_length * 0.35
-	# Positions are joint anchors. SmartPolygon2D handles the geometry shift via pivot_offset.
-	var shoulder_left_x := -(torso_thickness * 0.65)
-	var shoulder_right_x := -shoulder_left_x
-	var arm_lower_offset := arm_length * 0.92
-	var leg_left_x := -torso_thickness * 0.35
-	var leg_right_x := -leg_left_x
-	var leg_upper_y := hip_y
-	var leg_lower_y := hip_y + leg_length * 0.9
-	var foot_y := leg_lower_y + leg_length * 0.55
-	var eye_offset_x := head_diameter * 0.18
-	var eye_y := head_center.y - head_diameter * 0.06
-	var mouth_y := head_center.y + head_diameter * 0.12
-	var applied := false
-
-	for index in range(node_specs.size()):
-		var node_spec := node_specs[index]
-		var node_name := str(node_spec.get("name", "")).to_lower()
-
-		if _is_head_node(node_name):
-			node_spec["shape_type"] = SHAPE_CIRCLE
-			node_spec["size"] = Vector2(head_diameter, head_diameter)
-			node_spec["position"] = head_center
-			applied = true
-		elif _is_eye_node(node_name):
-			node_spec["shape_type"] = SHAPE_CIRCLE
-			node_spec["size"] = Vector2(maxf(head_diameter * 0.14, 6.0), maxf(head_diameter * 0.14, 6.0))
-			var eye_side := _node_side(node_name, index)
-			var eye_x := -eye_offset_x if eye_side == "left" else eye_offset_x if eye_side == "right" else 0.0
-			node_spec["position"] = Vector2(eye_x, eye_y)
-			applied = true
-		elif _is_mouth_node(node_name) or _is_nose_node(node_name):
-			node_spec["shape_type"] = SHAPE_CIRCLE
-			node_spec["size"] = Vector2(maxf(head_diameter * 0.08, 4.0), maxf(head_diameter * 0.08, 4.0))
-			node_spec["position"] = Vector2(0.0, mouth_y)
-			applied = true
-		elif _is_torso_node(node_name):
-			node_spec["shape_type"] = SHAPE_CAPSULE
-			node_spec["size"] = Vector2(torso_thickness, torso_length)
-			node_spec["position"] = torso_center
-			applied = true
-		elif _is_arm_node(node_name):
-			node_spec["shape_type"] = SHAPE_CAPSULE
-			node_spec["size"] = Vector2(arm_length, arm_thickness)
-			var arm_side := _node_side(node_name, index)
-			var arm_segment := _node_segment(node_name)
-			var arm_x := shoulder_left_x if arm_side == "left" else shoulder_right_x if arm_side == "right" else (shoulder_left_x if index % 2 == 0 else shoulder_right_x)
-			if arm_segment == "lower":
-				arm_x += -arm_lower_offset if arm_side != "right" else arm_lower_offset
-			node_spec["position"] = Vector2(arm_x, shoulder_y)
-			applied = true
-		elif _is_hand_node(node_name):
-			node_spec["shape_type"] = SHAPE_CIRCLE
-			node_spec["size"] = Vector2(maxf(arm_thickness * 0.9, 8.0), maxf(arm_thickness * 0.9, 8.0))
-			var hand_side := _node_side(node_name, index)
-			var hand_x := shoulder_left_x - arm_lower_offset if hand_side == "left" else shoulder_right_x + arm_lower_offset if hand_side == "right" else 0.0
-			node_spec["position"] = Vector2(hand_x, shoulder_y)
-			applied = true
-		elif _is_leg_node(node_name):
-			node_spec["shape_type"] = SHAPE_CAPSULE
-			node_spec["size"] = Vector2(leg_thickness, leg_length)
-			var leg_side := _node_side(node_name, index)
-			var leg_segment := _node_segment(node_name)
-			var leg_x := leg_left_x if leg_side == "left" else leg_right_x if leg_side == "right" else (leg_left_x if index % 2 == 0 else leg_right_x)
-			var leg_y := leg_upper_y if leg_segment != "lower" else leg_lower_y
-			node_spec["position"] = Vector2(leg_x, leg_y)
-			applied = true
-		elif _is_foot_node(node_name):
-			node_spec["shape_type"] = SHAPE_CAPSULE
-			node_spec["size"] = Vector2(maxf(leg_thickness * 2.0, 18.0), maxf(leg_thickness * 0.8, 8.0))
-			var foot_side := _node_side(node_name, index)
-			var foot_x := leg_left_x if foot_side == "left" else leg_right_x if foot_side == "right" else 0.0
-			node_spec["position"] = Vector2(foot_x, foot_y)
-			applied = true
-
-		node_specs[index] = node_spec
-
-	return applied
-
-
-func _is_humanoid_prompt(prompt_text: String) -> bool:
-	return _contains_any(prompt_text, ["stick figure", "humanoid", "human", "person", "character", "figure", "body", "limb", "arm", "leg", "head", "anatomy"])
-
-
-func _is_environment_node(node_name: String, humanoid_prompt: bool) -> bool:
+func _is_environment_node(node_name: String) -> bool:
 	var keywords := ["background", "bg", "floor", "ground", "groundplane", "ground_plane", "horizon", "sky", "scene", "room", "stage", "shadow", "lighting", "light", "sun", "moon", "cloud", "tree", "grass", "terrain", "landscape", "wall", "pedestal", "platform", "stand"]
-	if humanoid_prompt:
-		keywords.append_array(["base", "support"])
 
 	return _contains_any(node_name, keywords)
-
-
-func _is_head_node(node_name: String) -> bool:
-	return _contains_any(node_name, ["head", "skull", "face"])
-
-
-func _is_eye_node(node_name: String) -> bool:
-	return _contains_any(node_name, ["eye", "eyes", "pupil", "iris"])
-
-
-func _is_mouth_node(node_name: String) -> bool:
-	return _contains_any(node_name, ["mouth", "smile"])
-
-
-func _is_nose_node(node_name: String) -> bool:
-	return _contains_any(node_name, ["nose"])
-
-
-func _is_torso_node(node_name: String) -> bool:
-	return _contains_any(node_name, ["torso", "body", "chest", "spine", "waist", "hip", "neck"])
-
-
-func _is_arm_node(node_name: String) -> bool:
-	return _contains_any(node_name, ["arm", "shoulder", "elbow", "wrist"])
-
-
-func _is_hand_node(node_name: String) -> bool:
-	return _contains_any(node_name, ["hand"])
-
-
-func _is_leg_node(node_name: String) -> bool:
-	return _contains_any(node_name, ["leg", "thigh", "calf", "knee", "ankle"])
-
-
-func _is_foot_node(node_name: String) -> bool:
-	return _contains_any(node_name, ["foot"])
-
-
-func _node_side(node_name: String, index: int) -> String:
-	if _contains_any(node_name, ["left"]):
-		return "left"
-	if _contains_any(node_name, ["right"]):
-		return "right"
-	return "left" if index % 2 == 0 else "right"
-
-
-func _node_segment(node_name: String) -> String:
-	if _contains_any(node_name, ["upper", "top", "proximal", "first"]):
-		return "upper"
-	if _contains_any(node_name, ["lower", "bottom", "distal", "second"]):
-		return "lower"
-	return ""
-
-
-func _largest_dimension_for_keywords(node_specs: Array[Dictionary], keywords: Array[String], fallback: float) -> float:
-	var result := fallback
-	var matched := false
-
-	for node_spec in node_specs:
-		var node_name := str(node_spec.get("name", "")).to_lower()
-		if _contains_any(node_name, keywords):
-			var node_size := _vector2_from_value(node_spec.get("size", Vector2(fallback, fallback)), Vector2(fallback, fallback))
-			result = maxf(result, maxf(abs(node_size.x), abs(node_size.y)))
-			matched = true
-
-	return result if matched else fallback
-
-
-func _smallest_dimension_for_keywords(node_specs: Array[Dictionary], keywords: Array[String], fallback: float) -> float:
-	var result := fallback
-	var matched := false
-
-	for node_spec in node_specs:
-		var node_name := str(node_spec.get("name", "")).to_lower()
-		if _contains_any(node_name, keywords):
-			var node_size := _vector2_from_value(node_spec.get("size", Vector2(fallback, fallback)), Vector2(fallback, fallback))
-			var candidate := minf(abs(node_size.x), abs(node_size.y))
-			result = candidate if not matched else minf(result, candidate)
-			matched = true
-
-	return result if matched else fallback
 
 
 func _vector2_from_value(value: Variant, fallback: Vector2) -> Vector2:
@@ -689,104 +485,6 @@ func _vector2_from_value(value: Variant, fallback: Vector2) -> Vector2:
 			return Vector2(float(value.get("x", fallback.x)), float(value.get("y", fallback.y)))
 
 	return fallback
-
-
-func _apply_prompt_shape_constraints(node_specs: Array[Dictionary], user_prompt: String) -> bool:
-	# The model often defaults to rectangles, so we correct them using semantic names and the original prompt.
-	if node_specs.is_empty():
-		return false
-
-	var prompt_text := user_prompt.strip_edges().to_lower()
-	var topmost_index := _find_topmost_node_index(node_specs)
-	var applied := false
-
-	for index in range(node_specs.size()):
-		var node_spec := node_specs[index]
-		var node_name := str(node_spec.get("name", "")).to_lower()
-		var current_shape_type := int(node_spec.get("shape_type", SHAPE_RECTANGLE))
-		var inferred_shape_type := _infer_shape_type_for_node(node_spec, node_name, prompt_text, current_shape_type, index, topmost_index)
-
-		if inferred_shape_type != current_shape_type:
-			node_spec["shape_type"] = inferred_shape_type
-			applied = true
-
-		if inferred_shape_type == SHAPE_CIRCLE:
-			node_spec["resolution"] = maxi(int(node_spec.get("resolution", 16)), 12)
-		elif inferred_shape_type == SHAPE_CAPSULE:
-			node_spec["resolution"] = maxi(int(node_spec.get("resolution", 16)), 12)
-		elif inferred_shape_type == SHAPE_STAR:
-			node_spec["resolution"] = maxi(int(node_spec.get("resolution", 7)), 7)
-			node_spec["star_inner_radius"] = clampf(float(node_spec.get("star_inner_radius", 0.5)), 0.35, 0.6)
-
-		node_specs[index] = node_spec
-
-	return applied
-
-
-
-func _infer_shape_type_for_node(node_spec: Dictionary, node_name: String, prompt_text: String, current_shape_type: int, index: int, topmost_index: int) -> int:
-	var size_value := node_spec.get("size", Vector2(128.0, 128.0))
-	var node_size := size_value if size_value is Vector2 else Vector2(128.0, 128.0)
-	var width := maxf(abs(node_size.x), 0.001)
-	var height := maxf(abs(node_size.y), 0.001)
-	var aspect_ratio := maxf(width, height) / minf(width, height)
-	var elongated := aspect_ratio >= 1.35
-	var square_like := aspect_ratio <= 1.2
-	var humanoid_prompt := _contains_any(prompt_text, ["stick figure", "humanoid", "human", "person", "character", "body", "limb", "arm", "leg", "head"])
-	var wants_star_shapes := _contains_any(prompt_text, ["star", "burst", "spark", "badge", "accent", "decorative", "ornament"])
-
-	if _contains_any(node_name, ["triangle", "arrow", "spike", "mountain", "roof", "shard", "wedge"]):
-		if _contains_any(prompt_text, ["triangle", "arrow", "spike", "mountain", "roof", "shard", "wedge"]):
-			return SHAPE_TRIANGLE
-
-	if current_shape_type == SHAPE_STAR and not wants_star_shapes:
-		return SHAPE_CAPSULE if humanoid_prompt else SHAPE_RECTANGLE
-
-	if humanoid_prompt:
-		if _contains_any(node_name, ["head", "skull", "face", "eye", "eyes", "pupil", "iris", "mouth", "nose", "ear"]):
-			return SHAPE_CIRCLE
-
-		if _contains_any(node_name, ["arm", "leg", "hand", "foot", "limb", "torso", "body", "neck", "shoulder", "elbow", "wrist", "knee", "ankle", "waist", "hip", "spine", "chest", "thigh", "calf", "connector", "beam", "pipe", "rod", "segment", "stick"]) or elongated:
-			return SHAPE_CAPSULE
-
-		if _contains_any(node_name, ["star", "burst", "spark", "accent", "badge", "asterisk", "ornament"]):
-			return SHAPE_CAPSULE if not wants_star_shapes else SHAPE_STAR
-
-		if index == topmost_index:
-			return SHAPE_CIRCLE
-
-		if square_like:
-			return SHAPE_CAPSULE
-
-		return current_shape_type
-
-	if _contains_any(node_name, ["head", "skull", "face", "eye", "eyes", "pupil", "iris", "mouth", "nose", "ear", "button", "dot", "orb"]):
-		return SHAPE_CIRCLE
-
-	if _contains_any(node_name, ["arm", "leg", "hand", "foot", "limb", "torso", "body", "neck", "shoulder", "elbow", "wrist", "knee", "ankle", "waist", "hip", "spine", "chest", "thigh", "calf", "connector", "beam", "pipe", "rod", "segment", "stick"]) or elongated:
-		return SHAPE_CAPSULE
-
-	if wants_star_shapes and _contains_any(node_name, ["star", "burst", "spark", "accent", "badge", "asterisk", "ornament"]):
-		return SHAPE_STAR
-
-	if square_like and _contains_any(node_name, ["rectangle", "rect", "box", "panel", "block", "window", "wall", "floor", "card", "tile"]):
-		return SHAPE_RECTANGLE
-
-	return current_shape_type
-
-
-func _find_topmost_node_index(node_specs: Array[Dictionary]) -> int:
-	var topmost_index := 0
-	var topmost_y := INF
-
-	for index in range(node_specs.size()):
-		var size_value := node_specs[index].get("position", Vector2.ZERO)
-		var position := size_value if size_value is Vector2 else Vector2.ZERO
-		if position.y < topmost_y:
-			topmost_y = position.y
-			topmost_index = index
-
-	return topmost_index
 
 
 func _contains_any(source_text: String, keywords: Array) -> bool:
@@ -821,8 +519,8 @@ func _normalize_node_spec(raw_node: Dictionary, index: int, used_names: Dictiona
 
 
 func _shape_type_from_value(raw_value: Variant) -> int:
-	if raw_value is int:
-		return clampi(raw_value, SHAPE_RECTANGLE, SHAPE_TRIANGLE)
+	if raw_value is int or raw_value is float:
+		return clampi(int(roundf(float(raw_value))), SHAPE_RECTANGLE, SHAPE_TRIANGLE)
 
 	var value_text := str(raw_value).strip_edges().to_upper()
 	match value_text:
@@ -837,6 +535,8 @@ func _shape_type_from_value(raw_value: Variant) -> int:
 		"TRIANGLE":
 			return SHAPE_TRIANGLE
 		_:
+			if value_text.is_valid_float():
+				return clampi(int(roundf(float(value_text))), SHAPE_RECTANGLE, SHAPE_TRIANGLE)
 			return SHAPE_RECTANGLE
 
 
@@ -890,24 +590,10 @@ func _is_valid_node_name_character(character: String) -> bool:
 	return (character >= "a" and character <= "z") or (character >= "A" and character <= "Z") or (character >= "0" and character <= "9") or character == "_"
 
 
-func _build_generated_content(node_specs: Array[Dictionary], container_name: String) -> void:
-	_clear_generated_content()
-
-	if editor_interface == null:
-		push_error("Editor interface is unavailable; generated nodes cannot be attached.")
-		return
-
-	var scene_root := editor_interface.get_edited_scene_root()
-	if scene_root == null or not is_instance_valid(scene_root):
-		push_error("No edited scene root is available for generated content.")
-		return
-
+func _create_generated_content(node_specs: Array[Dictionary], container_name: String) -> Node2D:
 	var container := Node2D.new()
 	container.name = container_name
 	container.position = Vector2.ZERO
-	scene_root.add_child(container)
-	container.owner = scene_root
-	_generated_container = container
 
 	for node_spec in node_specs:
 		var polygon_node := _instantiate_smart_polygon(node_spec)
@@ -915,11 +601,74 @@ func _build_generated_content(node_specs: Array[Dictionary], container_name: Str
 			continue
 
 		container.add_child(polygon_node)
-		polygon_node.owner = scene_root
 
-	var child_count := container.get_child_count()
-	if child_count == 0:
+	if container.get_child_count() == 0:
 		push_warning("Generated content container was created but no SmartPolygon2D nodes were added.")
+
+	return container
+
+
+func _apply_generated_content(previous_container: Node2D, generated_container: Node2D) -> void:
+	var scene_root := _get_edited_scene_root()
+	if scene_root == null:
+		push_error("No edited scene root is available for generated content.")
+		return
+
+	_detach_container(previous_container)
+	_attach_container(scene_root, generated_container)
+	_generated_container = generated_container
+
+
+func _restore_generated_content(previous_container: Node2D, generated_container: Node2D) -> void:
+	var scene_root := _get_edited_scene_root()
+	if scene_root == null:
+		push_error("No edited scene root is available for generated content.")
+		return
+
+	_detach_container(generated_container)
+	if previous_container != null and is_instance_valid(previous_container):
+		_attach_container(scene_root, previous_container)
+		_generated_container = previous_container
+	else:
+		_generated_container = null
+
+
+func _attach_container(scene_root: Node, container: Node2D) -> void:
+	if container == null or not is_instance_valid(container):
+		return
+
+	var current_parent := container.get_parent()
+	if current_parent != null:
+		current_parent.remove_child(container)
+
+	scene_root.add_child(container)
+	_set_owner_recursive(container, scene_root)
+
+
+func _detach_container(container: Node2D) -> void:
+	if container == null or not is_instance_valid(container):
+		return
+
+	var current_parent := container.get_parent()
+	if current_parent != null:
+		current_parent.remove_child(container)
+
+
+func _set_owner_recursive(node: Node, owner: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+
+	node.owner = owner
+	for child in node.get_children():
+		if child is Node:
+			_set_owner_recursive(child, owner)
+
+
+func _get_edited_scene_root() -> Node:
+	if editor_interface == null:
+		return null
+
+	return editor_interface.get_edited_scene_root()
 
 func _instantiate_smart_polygon(node_spec: Dictionary) -> Polygon2D:
 	var polygon_node := SMART_POLYGON_SCRIPT.new() as Polygon2D
@@ -937,19 +686,6 @@ func _instantiate_smart_polygon(node_spec: Dictionary) -> Polygon2D:
 	polygon_node.set("resolution", int(maxi(int(node_spec.get("resolution", 16)), 3)))
 
 	return polygon_node
-
-
-func _clear_generated_content() -> void:
-	if _generated_container == null:
-		return
-
-	if is_instance_valid(_generated_container):
-		var parent := _generated_container.get_parent()
-		if parent != null:
-			parent.remove_child(_generated_container)
-		_generated_container.queue_free()
-
-	_generated_container = null
 
 
 func _provider_name(provider_id: int) -> String:
