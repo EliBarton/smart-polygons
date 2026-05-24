@@ -306,6 +306,7 @@ Rules:
 - Use triangles for arrows, spikes, mountains, roofs, shards, and directional accents.
 - Do not use stars unless the prompt explicitly asks for stars or decorative star-like details.
 - For limbs and articulated parts, set pivot_offset so the joint stays anchored while the geometry extends away from the body.
+- When pivot_offset is used, keep pos_x and pos_y at the actual joint or attachment point. Do not also shift position by half the shape size to compensate for pivot_offset.
 - For capsule limbs, a common pivot_offset is [size_x / 2, 0] for left-facing parts and [-size_x / 2, 0] for right-facing parts.
 - For vertical leg segments, a common pivot_offset is [0, -size_y / 2] so the joint sits at the top edge.
 - For multi-node subjects, keep the node set focused on the subject anatomy or object parts only.
@@ -504,8 +505,9 @@ func _apply_humanoid_blind_pose(node_specs: Array[Dictionary], user_prompt: Stri
 	var torso_center := Vector2.ZERO
 	var shoulder_y := -(torso_length * 0.25)
 	var hip_y := torso_length * 0.35
-	var arm_left_x := -(torso_thickness * 0.65 + arm_length * 0.5)
-	var arm_right_x := -arm_left_x
+	# Positions are joint anchors. SmartPolygon2D handles the geometry shift via pivot_offset.
+	var shoulder_left_x := -(torso_thickness * 0.65)
+	var shoulder_right_x := -shoulder_left_x
 	var arm_lower_offset := arm_length * 0.92
 	var leg_left_x := -torso_thickness * 0.35
 	var leg_right_x := -leg_left_x
@@ -548,7 +550,7 @@ func _apply_humanoid_blind_pose(node_specs: Array[Dictionary], user_prompt: Stri
 			node_spec["size"] = Vector2(arm_length, arm_thickness)
 			var arm_side := _node_side(node_name, index)
 			var arm_segment := _node_segment(node_name)
-			var arm_x := arm_left_x if arm_side == "left" else arm_right_x if arm_side == "right" else (arm_left_x if index % 2 == 0 else arm_right_x)
+			var arm_x := shoulder_left_x if arm_side == "left" else shoulder_right_x if arm_side == "right" else (shoulder_left_x if index % 2 == 0 else shoulder_right_x)
 			if arm_segment == "lower":
 				arm_x += -arm_lower_offset if arm_side != "right" else arm_lower_offset
 			node_spec["position"] = Vector2(arm_x, shoulder_y)
@@ -557,7 +559,7 @@ func _apply_humanoid_blind_pose(node_specs: Array[Dictionary], user_prompt: Stri
 			node_spec["shape_type"] = SHAPE_CIRCLE
 			node_spec["size"] = Vector2(maxf(arm_thickness * 0.9, 8.0), maxf(arm_thickness * 0.9, 8.0))
 			var hand_side := _node_side(node_name, index)
-			var hand_x := arm_left_x - arm_lower_offset if hand_side == "left" else arm_right_x + arm_lower_offset if hand_side == "right" else 0.0
+			var hand_x := shoulder_left_x - arm_lower_offset if hand_side == "left" else shoulder_right_x + arm_lower_offset if hand_side == "right" else 0.0
 			node_spec["position"] = Vector2(hand_x, shoulder_y)
 			applied = true
 		elif _is_leg_node(node_name):
