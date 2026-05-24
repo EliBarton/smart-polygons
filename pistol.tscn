@@ -1,0 +1,168 @@
+[gd_scene format=3 uid="uid://d08owkumojd5i"]
+
+[ext_resource type="Script" uid="uid://bfp11dcvu2t7s" path="res://addons/smart_polygon/smart_polygon_2d.gd" id="1_08c3m"]
+
+[node name="Node2D" type="Node2D" unique_id=214900665]
+
+[node name="AI_Generated_Shapes" type="Node2D" parent="." unique_id=766632681]
+
+[node name="Slide" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=829803808]
+position = Vector2(0, -20)
+color = Color(0.2901961, 0.2901961, 0.3137255, 1)
+polygon = PackedVector2Array(-60, -15, 60, -15, 60, 15, -60, 15)
+script = ExtResource("1_08c3m")
+size = Vector2(120, 30)
+resolution = 16
+star_inner_radius = 0.5
+
+[node name="Frame" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=1036781871]
+position = Vector2(0, 2.5)
+color = Color(0.1764706, 0.1764706, 0.1882353, 1)
+polygon = PackedVector2Array(-60, -7.5, 60, -7.5, 60, 7.5, -60, 7.5)
+script = ExtResource("1_08c3m")
+size = Vector2(120, 15)
+resolution = 16
+star_inner_radius = 0.5
+
+[node name="Grip" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=677770533]
+position = Vector2(-35, 45)
+color = Color(0.101960786, 0.101960786, 0.10980392, 1)
+polygon = PackedVector2Array(-17.5, -35, 17.5, -35, 17.5, 35, -17.5, 35)
+script = ExtResource("1_08c3m")
+size = Vector2(35, 70)
+resolution = 16
+star_inner_radius = 0.5
+
+[node name="GripBase" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=1938730292]
+position = Vector2(-35, 85)
+color = Color(0.1764706, 0.1764706, 0.1882353, 1)
+polygon = PackedVector2Array(-22.5, -5, 22.5, -5, 22.5, 5, -22.5, 5)
+script = ExtResource("1_08c3m")
+size = Vector2(45, 10)
+resolution = 16
+star_inner_radius = 0.5
+
+[node name="TriggerGuardFront" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=1186973065]
+position = Vector2(5, 22.5)
+color = Color(0.1764706, 0.1764706, 0.1882353, 1)
+polygon = PackedVector2Array(1.530758e-16, -12.5, 0.24504286, -12.487962, 0.4877258, -12.451963, 0.72571164, -12.392351, 0.95670855, -12.309699, 1.1784918, -12.204803, 1.3889256, -12.078674, 1.5859832, -11.932526, 1.767767, -11.767767, 1.9325261, -11.585983, 2.078674, -11.388926, 2.2048032, -11.178492, 2.3096988, -10.956709, 2.392351, -10.725712, 2.4519632, -10.487726, 2.4879618, -10.245043, 2.5, -10, 2.4879618, 10.245043, 2.4519632, 10.487726, 2.392351, 10.725712, 2.3096988, 10.956709, 2.2048032, 11.178492, 2.078674, 11.388926, 1.9325261, 11.585983, 1.767767, 11.767767, 1.5859832, 11.932526, 1.3889256, 12.078674, 1.1784918, 12.204803, 0.95670855, 12.309699, 0.72571164, 12.392351, 0.4877258, 12.451963, 0.24504286, 12.487962, 1.530758e-16, 12.5, -0.24504286, 12.487962, -0.4877258, 12.451963, -0.72571164, 12.392351, -0.95670855, 12.309699, -1.1784918, 12.204803, -1.3889256, 12.078674, -1.5859832, 11.932526, -1.767767, 11.767767, -1.9325261, 11.585983, -2.078674, 11.388926, -2.2048032, 11.178492, -2.3096988, 10.956709, -2.392351, 10.725712, -2.4519632, 10.487726, -2.4879618, 10.245043, -2.5, 10, -2.4879618, -10.245043, -2.4519632, -10.487726, -2.392351, -10.725712, -2.3096988, -10.956709, -2.2048032, -11.178492, -2.078674, -11.388926, -1.9325261, -11.585983, -1.767767, -11.767767, -1.5859832, -11.932526, -1.3889256, -12.078674, -1.1784918, -12.204803, -0.95670855, -12.309699, -0.72571164, -12.392351, -0.4877258, -12.451963, -0.24504286, -12.487962, -4.592274e-16, -12.5)
+script = ExtResource("1_08c3m")
+shape_type = 3
+size = Vector2(5, 25)
+resolution = 16
+star_inner_radius = 0.5
+
+[node name="TriggerGuardBottom" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=344785195]
+position = Vector2(-10, 32.5)
+color = Color(0.1764706, 0.1764706, 0.1882353, 1)
+polygon = PackedVector2Array(-15, -2.5, 15, -2.5, 15, 2.5, -15, 2.5)
+script = ExtResource("1_08c3m")
+size = Vector2(30, 5)
+resolution = 16
+star_inner_radius = 0.5
+
+[node name="Trigger" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=514560158]
+position = Vector2(-10, 17.5)
+color = Color(0.627451, 0.627451, 0.64705884, 1)
+polygon = PackedVector2Array(1.530758e-16, 0, 0.24504286, 0.012038231, 0.4877258, 0.048036575, 0.72571164, 0.10764885, 0.95670855, 0.19030094, 1.1784918, 0.29519653, 1.3889256, 0.42132568, 1.5859832, 0.5674739, 1.767767, 0.73223305, 1.9325261, 0.9140167, 2.078674, 1.1110744, 2.2048032, 1.3215084, 2.3096988, 1.5432916, 2.392351, 1.7742882, 2.4519632, 2.0122743, 2.4879618, 2.2549572, 2.5, 2.5, 2.4879618, 12.745043, 2.4519632, 12.987726, 2.392351, 13.225712, 2.3096988, 13.456709, 2.2048032, 13.678492, 2.078674, 13.888926, 1.9325261, 14.085983, 1.767767, 14.267767, 1.5859832, 14.432526, 1.3889256, 14.578674, 1.1784918, 14.704803, 0.95670855, 14.809699, 0.72571164, 14.892351, 0.4877258, 14.951963, 0.24504286, 14.987962, 1.530758e-16, 15, -0.24504286, 14.987962, -0.4877258, 14.951963, -0.72571164, 14.892351, -0.95670855, 14.809699, -1.1784918, 14.704803, -1.3889256, 14.578674, -1.5859832, 14.432526, -1.767767, 14.267767, -1.9325261, 14.085983, -2.078674, 13.888926, -2.2048032, 13.678492, -2.3096988, 13.456709, -2.392351, 13.225712, -2.4519632, 12.987726, -2.4879618, 12.745043, -2.5, 12.5, -2.4879618, 2.2549572, -2.4519632, 2.0122743, -2.392351, 1.7742882, -2.3096988, 1.5432916, -2.2048032, 1.3215084, -2.078674, 1.1110744, -1.9325261, 0.9140167, -1.767767, 0.73223305, -1.5859832, 0.5674739, -1.3889256, 0.42132568, -1.1784918, 0.29519653, -0.95670855, 0.19030094, -0.72571164, 0.10764885, -0.4877258, 0.048036575, -0.24504286, 0.012038231, -4.592274e-16, 0)
+script = ExtResource("1_08c3m")
+shape_type = 3
+size = Vector2(5, 15)
+resolution = 16
+star_inner_radius = 0.5
+pivot_offset = Vector2(0, -7.5)
+
+[node name="Hammer" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=2088392182]
+position = Vector2(-56, -12)
+color = Color(0.627451, 0.627451, 0.64705884, 1)
+polygon = PackedVector2Array(-5, -17.5, 0, -2.5, -10, -2.5)
+script = ExtResource("1_08c3m")
+shape_type = 4
+size = Vector2(10, 15)
+resolution = 16
+star_inner_radius = 0.5
+pivot_offset = Vector2(5, 7.5)
+
+[node name="FrontSight" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=1230076839]
+position = Vector2(50, -40)
+color = Color(0.101960786, 0.101960786, 0.10980392, 1)
+polygon = PackedVector2Array(0, -6.6666665, 5, 3.3333333, -5, 3.3333333)
+script = ExtResource("1_08c3m")
+shape_type = 4
+size = Vector2(10, 10)
+resolution = 16
+star_inner_radius = 0.5
+
+[node name="RearSight" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=237119879]
+position = Vector2(-50, -40)
+color = Color(0.101960786, 0.101960786, 0.10980392, 1)
+polygon = PackedVector2Array(-7.5, -5, 7.5, -5, 7.5, 5, -7.5, 5)
+script = ExtResource("1_08c3m")
+size = Vector2(15, 10)
+resolution = 16
+star_inner_radius = 0.5
+
+[node name="BarrelTip" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=517360096]
+position = Vector2(60, -19)
+color = Color(0.06666667, 0.06666667, 0.06666667, 1)
+polygon = PackedVector2Array(3.061516e-16, -7.5, 0.49008572, -7.4759235, 0.9754516, -7.4039264, 1.4514233, -7.284702, 1.9134171, -7.1193976, 2.3569837, -6.9096065, 2.777851, -6.657348, 3.1719663, -6.365052, 3.535534, -6.035534, 3.8650522, -5.6719666, 4.157348, -5.277851, 4.4096065, -4.8569837, 4.6193976, -4.413417, 4.784702, -3.9514232, 4.9039264, -3.4754515, 4.9759235, -2.9900856, 5, -2.5, 4.9759235, 2.9900856, 4.9039264, 3.4754515, 4.784702, 3.9514232, 4.6193976, 4.413417, 4.4096065, 4.8569837, 4.157348, 5.277851, 3.8650522, 5.6719666, 3.535534, 6.035534, 3.1719663, 6.365052, 2.777851, 6.657348, 2.3569837, 6.9096065, 1.9134171, 7.1193976, 1.4514233, 7.284702, 0.9754516, 7.4039264, 0.49008572, 7.4759235, 3.061516e-16, 7.5, -0.49008572, 7.4759235, -0.9754516, 7.4039264, -1.4514233, 7.284702, -1.9134171, 7.1193976, -2.3569837, 6.9096065, -2.777851, 6.657348, -3.1719663, 6.365052, -3.535534, 6.035534, -3.8650522, 5.6719666, -4.157348, 5.277851, -4.4096065, 4.8569837, -4.6193976, 4.413417, -4.784702, 3.9514232, -4.9039264, 3.4754515, -4.9759235, 2.9900856, -5, 2.5, -4.9759235, -2.9900856, -4.9039264, -3.4754515, -4.784702, -3.9514232, -4.6193976, -4.413417, -4.4096065, -4.8569837, -4.157348, -5.277851, -3.8650522, -5.6719666, -3.535534, -6.035534, -3.1719663, -6.365052, -2.777851, -6.657348, -2.3569837, -6.9096065, -1.9134171, -7.1193976, -1.4514233, -7.284702, -0.9754516, -7.4039264, -0.49008572, -7.4759235, -9.184548e-16, -7.5)
+script = ExtResource("1_08c3m")
+shape_type = 3
+size = Vector2(10, 15)
+resolution = 16
+star_inner_radius = 0.5
+
+[node name="EjectionPort" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=1266670297]
+position = Vector2(10, -20)
+color = Color(0.06666667, 0.06666667, 0.06666667, 1)
+polygon = PackedVector2Array(-10, -5, 10, -5, 10, 5, -10, 5)
+script = ExtResource("1_08c3m")
+size = Vector2(20, 10)
+resolution = 16
+star_inner_radius = 0.5
+
+[node name="Serration1" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=312509732]
+position = Vector2(-40, -20)
+color = Color(0.13333334, 0.13333334, 0.13333334, 1)
+polygon = PackedVector2Array(-1.5, -10, 1.5, -10, 1.5, 10, -1.5, 10)
+script = ExtResource("1_08c3m")
+size = Vector2(3, 20)
+resolution = 16
+star_inner_radius = 0.5
+
+[node name="Serration2" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=1882941088]
+position = Vector2(-45, -20)
+color = Color(0.13333334, 0.13333334, 0.13333334, 1)
+polygon = PackedVector2Array(-1.5, -10, 1.5, -10, 1.5, 10, -1.5, 10)
+script = ExtResource("1_08c3m")
+size = Vector2(3, 20)
+resolution = 16
+star_inner_radius = 0.5
+
+[node name="Serration3" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=335855324]
+position = Vector2(-50, -20)
+color = Color(0.13333334, 0.13333334, 0.13333334, 1)
+polygon = PackedVector2Array(-1.5, -10, 1.5, -10, 1.5, 10, -1.5, 10)
+script = ExtResource("1_08c3m")
+size = Vector2(3, 20)
+resolution = 16
+star_inner_radius = 0.5
+
+[node name="MagRelease" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=888582831]
+position = Vector2(-20, 15)
+color = Color(0.06666667, 0.06666667, 0.06666667, 1)
+polygon = PackedVector2Array(2.4492127e-16, -4, 1.5307337, -3.695518, 2.828427, -2.828427, 3.695518, -1.5307337, 4, 0, 3.695518, 1.5307337, 2.828427, 2.828427, 1.5307337, 3.695518, 2.4492127e-16, 4, -1.5307337, 3.695518, -2.828427, 2.828427, -3.695518, 1.5307337, -4, 4.8984254e-16, -3.695518, -1.5307337, -2.828427, -2.828427, -1.5307337, -3.695518)
+script = ExtResource("1_08c3m")
+shape_type = 1
+size = Vector2(8, 8)
+resolution = 16
+star_inner_radius = 0.5
+
+[node name="UnderbarrelRail" type="Polygon2D" parent="AI_Generated_Shapes" unique_id=59781517]
+position = Vector2(35, 12.5)
+color = Color(0.101960786, 0.101960786, 0.10980392, 1)
+polygon = PackedVector2Array(-20, -2.5, 20, -2.5, 20, 2.5, -20, 2.5)
+script = ExtResource("1_08c3m")
+size = Vector2(40, 5)
+resolution = 16
+star_inner_radius = 0.5

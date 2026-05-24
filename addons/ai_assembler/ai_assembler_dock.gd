@@ -4,22 +4,45 @@ extends VBoxContainer
 
 const SMART_POLYGON_SCRIPT: Script = preload("res://addons/smart_polygon/smart_polygon_2d.gd")
 const OPENAI_ENDPOINT := "https://api.openai.com/v1/chat/completions"
-const OPENAI_MODEL := "gpt-5.4-mini"
-const GEMINI_MODEL := "gemini-3.5-flash"
+const GEMINI_ENDPOINT_TEMPLATE := "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s"
 const GENERATED_CONTAINER_NAME := "AI_Generated_Shapes"
 const API_KEY_CONFIG_PATH := "user://ai_assembler.cfg"
 const API_KEY_CONFIG_SECTION := "credentials"
 const API_KEY_CONFIG_KEY := "api_key"
+const MODEL_CONFIG_SECTION := "models"
+const OPENAI_MODEL_CONFIG_KEY := "openai_model"
+const GEMINI_MODEL_CONFIG_KEY := "gemini_model"
+const FAST_REQUEST_TIMEOUT := 180.0
+const SLOW_REQUEST_TIMEOUT := 600.0
 const SHAPE_RECTANGLE := 0
 const SHAPE_CIRCLE := 1
 const SHAPE_STAR := 2
 const SHAPE_CAPSULE := 3
 const SHAPE_TRIANGLE := 4
 
-
 enum Provider {
 	OPENAI = 0,
 	GEMINI = 1,
+}
+
+const DEFAULT_MODEL_IDS := {
+	Provider.OPENAI: "gpt-5.4-mini",
+	Provider.GEMINI: "gemini-2.5-flash",
+}
+
+const MODEL_CATALOG := {
+	Provider.OPENAI: [
+		{"label": "GPT-5.4 Mini", "model_id": "gpt-5.4-mini"},
+		{"label": "GPT-5.5", "model_id": "gpt-5.5"},
+		{"label": "GPT-5.4 Nano", "model_id": "gpt-5.4-nano"},
+	],
+	Provider.GEMINI: [
+		{"label": "Gemini 3.5 Flash", "model_id": "gemini-3.5-flash"},
+		{"label": "Gemini 3.1 Pro", "model_id": "gemini-3.1-pro-preview"},
+		{"label": "Gemini 2.5 Flash", "model_id": "gemini-2.5-flash"},
+		{"label": "Gemini 2.5 Pro", "model_id": "gemini-2.5-pro"},
+		{"label": "Gemini 3 Pro Preview", "model_id": "gemini-3-pro-preview"},
+	],
 }
 
 
@@ -27,11 +50,13 @@ var editor_interface: EditorInterface
 var _scene_root: Node
 var _generated_container: Node2D
 var _request_in_flight := false
+var _active_request_timeout := FAST_REQUEST_TIMEOUT
 var _last_user_prompt: String = ""
 
 
 @onready var prompt_text_edit: TextEdit = $PromptTextEdit
 @onready var provider_option_button: OptionButton = $ProviderOptionButton
+@onready var model_option_button: OptionButton = $ModelOptionButton
 @onready var api_key_line_edit: LineEdit = $ApiKeyLineEdit
 @onready var generate_button: Button = $GenerateButton
 @onready var status_label: Label = $StatusLabel
@@ -51,7 +76,7 @@ func set_scene_root(value: Node) -> void:
 func _ready() -> void:
 	# Configure the dock controls once the scene is live so the plugin can safely reuse the scene at any time.
 	_configure_ui()
-	_load_api_key()
+	_load_preferences()
 	_wire_signals()
 	_update_scene_state()
 
@@ -65,6 +90,12 @@ func _configure_ui() -> void:
 	provider_option_button.add_item("OpenAI", Provider.OPENAI)
 	provider_option_button.add_item("Gemini", Provider.GEMINI)
 	provider_option_button.selected = 0
+	provider_option_button.fit_to_longest_item = true
+
+	model_option_button.clear()
+	model_option_button.allow_reselect = true
+	model_option_button.fit_to_longest_item = true
+	_populate_model_options(provider_option_button.get_selected_id(), DEFAULT_MODEL_IDS.get(Provider.OPENAI, "gpt-5.4-mini"))
 
 	api_key_line_edit.placeholder_text = "OpenAI or Gemini API key"
 	api_key_line_edit.secret = true
@@ -77,7 +108,7 @@ func _configure_ui() -> void:
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	generate_request.use_threads = true
-	generate_request.timeout = 60.0
+	generate_request.timeout = FAST_REQUEST_TIMEOUT
 
 
 func _update_scene_state() -> void:
@@ -106,8 +137,29 @@ func _wire_signals() -> void:
 	if not generate_request.request_completed.is_connected(_on_request_completed):
 		generate_request.request_completed.connect(_on_request_completed)
 
+	if not provider_option_button.item_selected.is_connected(_on_provider_option_selected):
+		provider_option_button.item_selected.connect(_on_provider_option_selected)
+
+	if not model_option_button.item_selected.is_connected(_on_model_option_selected):
+		model_option_button.item_selected.connect(_on_model_option_selected)
+
 	if not api_key_line_edit.text_changed.is_connected(_on_api_key_text_changed):
 		api_key_line_edit.text_changed.connect(_on_api_key_text_changed)
+
+
+func _on_provider_option_selected(index: int) -> void:
+	var provider_id := provider_option_button.get_item_id(index)
+	var saved_model_id := _get_saved_model_id(provider_id)
+	_populate_model_options(provider_id, saved_model_id)
+
+
+func _on_model_option_selected(index: int) -> void:
+	var provider_id := provider_option_button.get_selected_id()
+	var model_id := _get_model_id_at_index(index)
+	if model_id.is_empty():
+		return
+
+	_save_model_selection(provider_id, model_id)
 
 
 func _on_generate_button_pressed() -> void:
@@ -137,18 +189,21 @@ func _on_generate_button_pressed() -> void:
 	_last_user_prompt = user_prompt
 
 	var provider_id := provider_option_button.get_selected_id()
+	var model_id := _get_selected_model_id(provider_id)
+	_active_request_timeout = _request_timeout_for_model(model_id)
+	generate_request.timeout = _active_request_timeout
 	var request_url := ""
 	var request_headers := PackedStringArray(["Content-Type: application/json"])
 	var request_body := ""
 
 	match provider_id:
 		Provider.GEMINI:
-			request_url = _build_gemini_request_url(api_key)
+			request_url = _build_gemini_request_url(api_key, model_id)
 			request_body = _build_gemini_request_body(user_prompt)
 		_:
 			request_url = OPENAI_ENDPOINT
 			request_headers.append("Authorization: Bearer %s" % api_key)
-			request_body = _build_openai_request_body(user_prompt)
+			request_body = _build_openai_request_body(user_prompt, model_id)
 
 	_request_in_flight = true
 	generate_button.disabled = true
@@ -161,26 +216,116 @@ func _on_generate_button_pressed() -> void:
 		_set_status("Failed to start request: %s" % error_string(error))
 
 
-func _load_api_key() -> void:
-	var config := ConfigFile.new()
-	var error := config.load(API_KEY_CONFIG_PATH)
-	if error != OK:
-		return
-
-	var stored_key := str(config.get_value(API_KEY_CONFIG_SECTION, API_KEY_CONFIG_KEY, ""))
-	api_key_line_edit.text = stored_key
+func _load_preferences() -> void:
+	var config := _load_preferences_config()
+	api_key_line_edit.text = str(config.get_value(API_KEY_CONFIG_SECTION, API_KEY_CONFIG_KEY, ""))
+	_apply_saved_model_selection(config)
 
 
 func _save_api_key(api_key: String) -> void:
-	var config := ConfigFile.new()
-	config.set_value(API_KEY_CONFIG_SECTION, API_KEY_CONFIG_KEY, api_key)
+	_save_config_value(API_KEY_CONFIG_SECTION, API_KEY_CONFIG_KEY, api_key)
+
+
+func _save_model_selection(provider_id: int, model_id: String) -> void:
+	_save_config_value(MODEL_CONFIG_SECTION, _model_config_key(provider_id), model_id)
+
+
+func _save_config_value(section: String, key: String, value: Variant) -> void:
+	var config := _load_preferences_config()
+	config.set_value(section, key, value)
 	var error := config.save(API_KEY_CONFIG_PATH)
 	if error != OK:
-		push_warning("Failed to save the AI Assembler API key: %s" % error_string(error))
+		push_warning("Failed to save the AI Assembler preferences: %s" % error_string(error))
+
+
+func _load_preferences_config() -> ConfigFile:
+	var config := ConfigFile.new()
+	var error := config.load(API_KEY_CONFIG_PATH)
+	if error != OK and error != ERR_FILE_NOT_FOUND:
+		push_warning("Failed to load the AI Assembler preferences: %s" % error_string(error))
+	return config
 
 
 func _on_api_key_text_changed(new_text: String) -> void:
 	_save_api_key(new_text)
+
+
+func _apply_saved_model_selection(config: ConfigFile) -> void:
+	var provider_id := provider_option_button.get_selected_id()
+	var saved_model_id := str(config.get_value(MODEL_CONFIG_SECTION, _model_config_key(provider_id), _default_model_id_for_provider(provider_id)))
+	_populate_model_options(provider_id, saved_model_id)
+
+
+func _populate_model_options(provider_id: int, preferred_model_id: String = "") -> void:
+	model_option_button.clear()
+
+	var model_entries: Array = MODEL_CATALOG.get(provider_id, [])
+	for model_entry_variant in model_entries:
+		if model_entry_variant is not Dictionary:
+			continue
+
+		var model_entry := model_entry_variant as Dictionary
+		var model_label := str(model_entry.get("label", "Model"))
+		var model_id := str(model_entry.get("model_id", ""))
+		if model_id.is_empty():
+			continue
+
+		model_option_button.add_item(model_label)
+		var item_index := model_option_button.item_count - 1
+		model_option_button.set_item_metadata(item_index, model_id)
+
+	var model_to_select := preferred_model_id
+	if model_to_select.is_empty():
+		model_to_select = _default_model_id_for_provider(provider_id)
+
+	var selected_index := _find_model_index(model_to_select)
+	if selected_index == -1 and model_option_button.item_count > 0:
+		selected_index = 0
+
+	if selected_index != -1:
+		model_option_button.select(selected_index)
+
+
+func _find_model_index(model_id: String) -> int:
+	for item_index in range(model_option_button.item_count):
+		var item_metadata := model_option_button.get_item_metadata(item_index)
+		if str(item_metadata) == model_id:
+			return item_index
+
+	return -1
+
+
+func _get_model_id_at_index(index: int) -> String:
+	if index < 0 or index >= model_option_button.item_count:
+		return ""
+
+	return str(model_option_button.get_item_metadata(index))
+
+
+func _get_selected_model_id(provider_id: int) -> String:
+	var selected_index := model_option_button.get_selected()
+	var selected_model_id := _get_model_id_at_index(selected_index)
+	if not selected_model_id.is_empty():
+		return selected_model_id
+
+	return _default_model_id_for_provider(provider_id)
+
+
+func _default_model_id_for_provider(provider_id: int) -> String:
+	return str(DEFAULT_MODEL_IDS.get(provider_id, "gpt-5.4-mini"))
+
+
+func _model_config_key(provider_id: int) -> String:
+	match provider_id:
+		Provider.GEMINI:
+			return GEMINI_MODEL_CONFIG_KEY
+		_:
+			return OPENAI_MODEL_CONFIG_KEY
+
+
+func _get_saved_model_id(provider_id: int) -> String:
+	var config := _load_preferences_config()
+	return str(config.get_value(MODEL_CONFIG_SECTION, _model_config_key(provider_id), _default_model_id_for_provider(provider_id)))
 
 
 func _on_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
@@ -188,7 +333,10 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 	_update_scene_state()
 
 	if result != HTTPRequest.RESULT_SUCCESS:
-		_set_status("The HTTP request failed before a response was received.")
+		if result == HTTPRequest.RESULT_TIMEOUT:
+			_set_status("The request timed out after %.0f seconds. Try a faster model or increase the timeout." % _active_request_timeout)
+		else:
+			_set_status("The HTTP request failed before a response was received.")
 		return
 
 	var response_text := body.get_string_from_utf8()
@@ -243,9 +391,9 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 	_set_status("Generated %d node(s) into the edited scene." % node_specs.size())
 
 
-func _build_openai_request_body(user_text: String) -> String:
+func _build_openai_request_body(user_text: String, model_id: String) -> String:
 	var payload := {
-		"model": OPENAI_MODEL,
+		"model": model_id,
 		"temperature": 0.2,
 		"response_format": {"type": "json_object"},
 		"messages": [
@@ -262,8 +410,16 @@ func _build_openai_request_body(user_text: String) -> String:
 	return JSON.stringify(payload)
 
 
-func _build_gemini_request_url(api_key: String) -> String:
-	return "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s" % [GEMINI_MODEL, api_key]
+func _build_gemini_request_url(api_key: String, model_id: String) -> String:
+	return GEMINI_ENDPOINT_TEMPLATE % [model_id, api_key]
+
+
+func _request_timeout_for_model(model_id: String) -> float:
+	var normalized_model_id := model_id.to_lower()
+	if normalized_model_id.find("pro") != -1 or normalized_model_id.find("5.5") != -1:
+		return SLOW_REQUEST_TIMEOUT
+
+	return FAST_REQUEST_TIMEOUT
 
 
 func _build_gemini_request_body(user_text: String) -> String:
