@@ -52,6 +52,11 @@ var _generated_container: Node2D
 var _request_in_flight := false
 var _active_request_timeout := FAST_REQUEST_TIMEOUT
 var _last_user_prompt: String = ""
+var _pending_provider_id := Provider.OPENAI
+var _pending_previous_container: Node2D
+var _pending_container_name: String = GENERATED_CONTAINER_NAME
+var _pending_existing_json: String = ""
+var _pending_edit_mode := false
 
 
 @onready var prompt_text_edit: TextEdit = $PromptTextEdit
@@ -187,8 +192,28 @@ func _on_generate_button_pressed() -> void:
 		return
 
 	_last_user_prompt = user_prompt
+	_clear_pending_generation_context()
+
+	var selection_container := _get_round_trip_container_from_selection()
+	var existing_json_state := ""
+	if selection_container != null:
+		existing_json_state = _serialize_existing_container(selection_container)
+		if existing_json_state.is_empty():
+			selection_container = null
+
+	if selection_container != null:
+		_pending_previous_container = selection_container
+		_pending_container_name = str(selection_container.name)
+		_pending_existing_json = existing_json_state
+		_pending_edit_mode = true
+	elif _generated_container != null and is_instance_valid(_generated_container):
+		_pending_previous_container = _generated_container
+		_pending_container_name = str(_generated_container.name)
+	else:
+		_pending_container_name = GENERATED_CONTAINER_NAME
 
 	var provider_id := provider_option_button.get_selected_id()
+	_pending_provider_id = provider_id
 	var model_id := _get_selected_model_id(provider_id)
 	_active_request_timeout = _request_timeout_for_model(model_id)
 	generate_request.timeout = _active_request_timeout
@@ -199,11 +224,11 @@ func _on_generate_button_pressed() -> void:
 	match provider_id:
 		Provider.GEMINI:
 			request_url = _build_gemini_request_url(api_key, model_id)
-			request_body = _build_gemini_request_body(user_prompt)
+			request_body = _build_gemini_request_body(user_prompt, _pending_existing_json)
 		_:
 			request_url = OPENAI_ENDPOINT
 			request_headers.append("Authorization: Bearer %s" % api_key)
-			request_body = _build_openai_request_body(user_prompt, model_id)
+			request_body = _build_openai_request_body(user_prompt, model_id, _pending_existing_json)
 
 	_request_in_flight = true
 	generate_button.disabled = true
@@ -213,6 +238,7 @@ func _on_generate_button_pressed() -> void:
 	if error != OK:
 		_request_in_flight = false
 		generate_button.disabled = false
+		_clear_pending_generation_context()
 		_set_status("Failed to start request: %s" % error_string(error))
 
 
@@ -328,9 +354,138 @@ func _get_saved_model_id(provider_id: int) -> String:
 	return str(config.get_value(MODEL_CONFIG_SECTION, _model_config_key(provider_id), _default_model_id_for_provider(provider_id)))
 
 
+func _clear_pending_generation_context() -> void:
+	_pending_provider_id = Provider.OPENAI
+	_pending_previous_container = null
+	_pending_container_name = GENERATED_CONTAINER_NAME
+	_pending_existing_json = ""
+	_pending_edit_mode = false
+
+
+func _get_round_trip_container_from_selection() -> Node2D:
+	if editor_interface == null:
+		return null
+
+	var selection := editor_interface.get_selection()
+	if selection == null:
+		return null
+
+	var selected_nodes := selection.get_selected_nodes()
+	if selected_nodes.size() != 1:
+		return null
+
+	var selected_node := selected_nodes[0]
+	if not (selected_node is Node2D):
+		return null
+
+	var container := selected_node as Node2D
+	if container == null or not _has_smart_polygon_children(container):
+		return null
+
+	return container
+
+
+func _has_smart_polygon_children(container: Node2D) -> bool:
+	if container == null:
+		return false
+
+	for child in container.get_children():
+		if child is SmartPolygon2D:
+			return true
+
+	return false
+
+
+func _serialize_existing_container(container: Node2D) -> String:
+	if container == null:
+		return ""
+
+	var nodes_array: Array[Dictionary] = []
+
+	for child in container.get_children():
+		if not (child is SmartPolygon2D):
+			continue
+
+		var polygon_child := child as SmartPolygon2D
+		if polygon_child == null:
+			continue
+
+		var node_spec := {
+			"name": str(polygon_child.name),
+			"type": int(polygon_child.shape_type),
+			"size_x": snappedf(polygon_child.size.x, 0.1),
+			"size_y": snappedf(polygon_child.size.y, 0.1),
+			"pivot_offset_x": snappedf(polygon_child.pivot_offset.x, 0.1),
+			"pivot_offset_y": snappedf(polygon_child.pivot_offset.y, 0.1),
+			"rotation": snappedf(polygon_child.rotation_degrees, 0.1),
+			"resolution": int(polygon_child.resolution),
+			"star_inner_radius": snappedf(polygon_child.star_inner_radius, 0.01),
+			"color": "#" + polygon_child.color.to_html(false),
+			"pos_x": snappedf(polygon_child.position.x, 0.1),
+			"pos_y": snappedf(polygon_child.position.y, 0.1),
+		}
+		nodes_array.append(node_spec)
+
+	var payload := {"nodes": nodes_array}
+	return JSON.stringify(payload, "\t")
+
+
+func _build_nodes_from_spec(node_specs: Array[Dictionary]) -> Array[Node]:
+	var new_nodes: Array[Node] = []
+
+	for node_spec in node_specs:
+		var polygon_node := _instantiate_smart_polygon(node_spec)
+		if polygon_node != null:
+			new_nodes.append(polygon_node)
+
+	return new_nodes
+
+
+func _copy_node2d_state(source_node: Node2D, target_node: Node2D) -> void:
+	if source_node == null or target_node == null:
+		return
+
+	target_node.position = source_node.position
+	target_node.rotation_degrees = source_node.rotation_degrees
+	target_node.scale = source_node.scale
+	target_node.skew = source_node.skew
+	target_node.visible = source_node.visible
+	target_node.z_index = source_node.z_index
+	target_node.z_as_relative = source_node.z_as_relative
+
+
+func _clear_editor_selection() -> void:
+	if editor_interface == null:
+		return
+
+	var selection := editor_interface.get_selection()
+	if selection != null:
+		selection.clear()
+
+
+func _focus_editor_selection(node: Node) -> void:
+	if editor_interface == null or node == null or not is_instance_valid(node):
+		return
+
+	var selection := editor_interface.get_selection()
+	if selection == null:
+		return
+
+	selection.clear()
+	selection.add_node(node)
+
+
 func _on_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	_request_in_flight = false
 	_update_scene_state()
+
+	var previous_container: Node2D = null
+	if is_instance_valid(_pending_previous_container):
+		previous_container = _pending_previous_container
+	var generated_container_name := _pending_container_name
+	var provider_id := _pending_provider_id
+	var pending_edit_mode := _pending_edit_mode
+	_clear_pending_generation_context()
 
 	if result != HTTPRequest.RESULT_SUCCESS:
 		if result == HTTPRequest.RESULT_TIMEOUT:
@@ -352,7 +507,6 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		push_error(error_message)
 		return
 
-	var provider_id := provider_option_button.get_selected_id()
 	var schema_text := _extract_schema_text(response_payload, provider_id)
 	if schema_text.is_empty():
 		_set_status("The model response did not contain a JSON schema payload.")
@@ -370,28 +524,57 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		_set_status("The schema contained no nodes to build.")
 		return
 
-	node_specs = _filter_subject_nodes(node_specs, _last_user_prompt)
+	if not pending_edit_mode:
+		node_specs = _filter_subject_nodes(node_specs, _last_user_prompt)
 
-	if editor_interface.get_edited_scene_root() == null:
+	var scene_root := editor_interface.get_edited_scene_root()
+	if scene_root == null:
 		_set_status("Open or create a scene before applying generated nodes.")
 		return
 
-	var generated_container := _create_generated_content(node_specs, GENERATED_CONTAINER_NAME)
-	if generated_container == null:
+	var target_container: Node2D = previous_container
+	var container_was_created := false
+	if target_container == null:
+		target_container = Node2D.new()
+		target_container.name = generated_container_name
+		target_container.position = Vector2.ZERO
+		container_was_created = true
+	elif str(target_container.name).is_empty():
+		target_container.name = generated_container_name
+
+	var old_children: Array[Node] = []
+	for child in target_container.get_children():
+		if child is Node:
+			old_children.append(child)
+
+	var new_children := _build_nodes_from_spec(node_specs)
+	if new_children.is_empty():
 		_set_status("Failed to build the generated node tree.")
 		return
 
-	var previous_container: Node2D = _generated_container if is_instance_valid(_generated_container) else null
 	var undo_redo = editor_interface.get_editor_undo_redo()
-	undo_redo.create_action("Generate Smart Polygon Shapes")
-	undo_redo.add_do_method(self, "_apply_generated_content", previous_container, generated_container)
-	undo_redo.add_undo_method(self, "_restore_generated_content", previous_container, generated_container)
+	var action_name := "Edit Smart Polygon Shapes" if pending_edit_mode else "Generate Smart Polygon Shapes"
+	undo_redo.create_action(action_name)
+	undo_redo.add_do_reference(target_container)
+	undo_redo.add_undo_reference(target_container)
+	for old_child in old_children:
+		undo_redo.add_do_reference(old_child)
+		undo_redo.add_undo_reference(old_child)
+	for new_child in new_children:
+		undo_redo.add_do_reference(new_child)
+		undo_redo.add_undo_reference(new_child)
+
+	undo_redo.add_do_method(self, "_apply_generated_nodes", target_container, scene_root, old_children, new_children, container_was_created)
+	undo_redo.add_undo_method(self, "_restore_generated_nodes", target_container, scene_root, old_children, new_children, container_was_created)
+	_clear_editor_selection()
 	undo_redo.commit_action()
 
+	_generated_container = target_container
+	call_deferred("_focus_editor_selection", target_container)
 	_set_status("Generated %d node(s) into the edited scene." % node_specs.size())
 
 
-func _build_openai_request_body(user_text: String, model_id: String) -> String:
+func _build_openai_request_body(user_text: String, model_id: String, existing_json: String = "") -> String:
 	var payload := {
 		"model": model_id,
 		"temperature": 0.2,
@@ -403,7 +586,7 @@ func _build_openai_request_body(user_text: String, model_id: String) -> String:
 			},
 			{
 				"role": "user",
-				"content": _construct_prompt(user_text)
+				"content": _construct_prompt(user_text, existing_json)
 			},
 		],
 	}
@@ -422,7 +605,7 @@ func _request_timeout_for_model(model_id: String) -> float:
 	return FAST_REQUEST_TIMEOUT
 
 
-func _build_gemini_request_body(user_text: String) -> String:
+func _build_gemini_request_body(user_text: String, existing_json: String = "") -> String:
 	var payload := {
 		"generationConfig": {
 			"temperature": 0.2,
@@ -433,7 +616,7 @@ func _build_gemini_request_body(user_text: String) -> String:
 				"role": "user",
 				"parts": [
 					{
-						"text": _construct_prompt(user_text),
+						"text": _construct_prompt(user_text, existing_json),
 					}
 				],
 			},
@@ -442,9 +625,9 @@ func _build_gemini_request_body(user_text: String) -> String:
 	return JSON.stringify(payload)
 
 
-func _construct_prompt(user_text: String) -> String:
+func _construct_prompt(user_text: String, existing_json: String = "") -> String:
 	# The model is deliberately constrained to emit only the schema we can safely parse.
-	return """
+	var prompt_text := """
 You are generating data for a Godot 4 editor tool that assembles 2D vector art.
 
 Return ONLY a single valid JSON object. Do not include markdown, code fences, explanations, or extra keys outside the schema.
@@ -460,6 +643,8 @@ The JSON schema must be exactly:
 			"size_y": 128.0,
 			"pivot_offset_x": 0.0,
 			"pivot_offset_y": 0.0,
+			"resolution": 16,
+			"star_inner_radius": 0.5,
 			"color": "#RRGGBB",
 			"pos_x": 0.0,
 			"pos_y": 0.0
@@ -508,9 +693,27 @@ Rules:
 - Prefer more complex shapes when they improve the composition, especially capsules and triangles.
 - Use triangles for spikes, arrows, accents, and details that would be difficult to achieve with circles or rectangles, especially when conveying sharp points.
 
-User prompt:
+"""
+
+	if not existing_json.is_empty():
+		prompt_text += """
+CURRENT ASSET STATE:
+The user wants to modify an existing asset. Here is the current JSON schema of the asset:
+%s
+
+INSTRUCTIONS FOR EDITING:
+Modify the JSON above to fulfill the user's request.
+- You may change sizes, colors, rotations, positions, pivot offsets, resolutions, and star inner radii of existing nodes.
+- You may add new nodes or delete nodes if necessary.
+- Keep the names of unmodified nodes exactly the same.
+- Return the full updated JSON object, not a diff.
+""" % existing_json
+
+	prompt_text += """
+USER REQUEST:
 %s
 """ % user_text
+	return prompt_text
 
 
 func _extract_schema_text(response_payload: Variant, provider_id: int) -> String:
@@ -771,32 +974,55 @@ func _create_generated_content(node_specs: Array[Dictionary], container_name: St
 	return container
 
 
-func _apply_generated_content(previous_container: Node2D, generated_container: Node2D) -> void:
-	var scene_root := _get_edited_scene_root()
-	if scene_root == null:
-		push_error("No edited scene root is available for generated content.")
+func _apply_generated_nodes(target_container: Node2D, scene_root: Node, old_children: Array, new_children: Array, container_was_created: bool) -> void:
+	if target_container == null or scene_root == null:
 		return
 
-	_detach_container(previous_container)
-	_attach_container(scene_root, generated_container)
-	_generated_container = generated_container
+	_clear_editor_selection()
+
+	if container_was_created and target_container.get_parent() == null:
+		scene_root.add_child(target_container)
+		target_container.owner = scene_root
+
+	for old_child in old_children:
+		if old_child is Node and old_child.get_parent() == target_container:
+			target_container.remove_child(old_child)
+
+	for new_child in new_children:
+		if new_child is Node:
+			target_container.add_child(new_child)
+			_set_owner_recursive(new_child, scene_root)
+
+	_set_owner_recursive(target_container, scene_root)
+	_generated_container = target_container
+	call_deferred("_focus_editor_selection", target_container)
 
 
-func _restore_generated_content(previous_container: Node2D, generated_container: Node2D) -> void:
-	var scene_root := _get_edited_scene_root()
-	if scene_root == null:
-		push_error("No edited scene root is available for generated content.")
+func _restore_generated_nodes(target_container: Node2D, scene_root: Node, old_children: Array, new_children: Array, container_was_created: bool) -> void:
+	if target_container == null or scene_root == null:
 		return
 
-	_detach_container(generated_container)
-	if previous_container != null and is_instance_valid(previous_container):
-		_attach_container(scene_root, previous_container)
-		_generated_container = previous_container
-	else:
+	_clear_editor_selection()
+
+	for new_child in new_children:
+		if new_child is Node and new_child.get_parent() == target_container:
+			target_container.remove_child(new_child)
+
+	for old_child in old_children:
+		if old_child is Node:
+			target_container.add_child(old_child)
+			_set_owner_recursive(old_child, scene_root)
+
+	if container_was_created and target_container.get_parent() == scene_root:
+		scene_root.remove_child(target_container)
 		_generated_container = null
+	else:
+		_generated_container = target_container
+
+	call_deferred("_focus_editor_selection", target_container if not container_was_created else null)
 
 
-func _attach_container(scene_root: Node, container: Node2D) -> void:
+func _attach_container(parent: Node, container: Node2D, sibling_index: int = -1) -> void:
 	if container == null or not is_instance_valid(container):
 		return
 
@@ -804,8 +1030,18 @@ func _attach_container(scene_root: Node, container: Node2D) -> void:
 	if current_parent != null:
 		current_parent.remove_child(container)
 
-	scene_root.add_child(container)
-	_set_owner_recursive(container, scene_root)
+	var target_parent := parent
+	if target_parent == null or not is_instance_valid(target_parent):
+		target_parent = _get_edited_scene_root()
+
+	if target_parent == null:
+		return
+
+	target_parent.add_child(container)
+	if sibling_index >= 0 and sibling_index < target_parent.get_child_count():
+		target_parent.move_child(container, sibling_index)
+
+	_set_owner_recursive(container, _get_edited_scene_root())
 
 
 func _detach_container(container: Node2D) -> void:

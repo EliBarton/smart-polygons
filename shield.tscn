@@ -2,9 +2,9 @@
 
 [ext_resource type="Script" uid="uid://bfp11dcvu2t7s" path="res://addons/smart_polygon/smart_polygon_2d.gd" id="1_vuocu"]
 
-[node name="Shield" type="Node2D" unique_id=1114592243]
+[node name="Shield" type="Node2D" unique_id=1112343873]
 
-[node name="Metal_Rim" type="Polygon2D" parent="." unique_id=1559004383]
+[node name="Metal_Rim" type="Polygon2D" parent="." unique_id=483641881]
 color = Color(0.6039216, 0.6431373, 0.6901961, 1)
 polygon = PackedVector2Array(4.8984254e-15, -80, 30.614676, -73.91036, 56.568542, -56.568542, 73.91036, -30.614676, 80, 0, 73.91036, 30.614676, 56.568542, 56.568542, 30.614676, 73.91036, 4.8984254e-15, 80, -30.614676, 73.91036, -56.568542, 56.568542, -73.91036, 30.614676, -80, 9.796851e-15, -73.91036, -30.614676, -56.568542, -56.568542, -30.614676, -73.91036)
 script = ExtResource("1_vuocu")
@@ -13,7 +13,7 @@ size = Vector2(160, 160)
 resolution = 16
 star_inner_radius = 0.5
 
-[node name="Wood_Shield_Body" type="Polygon2D" parent="." unique_id=1035056180]
+[node name="Wood_Shield_Body" type="Polygon2D" parent="." unique_id=167118642]
 color = Color(0.43137255, 0.2784314, 0.23137255, 1)
 polygon = PackedVector2Array(4.2861222e-15, -70, 26.78784, -64.67157, 49.497475, -49.497475, 64.67157, -26.78784, 70, 0, 64.67157, 26.78784, 49.497475, 49.497475, 26.78784, 64.67157, 4.2861222e-15, 70, -26.78784, 64.67157, -49.497475, 49.497475, -64.67157, 26.78784, -70, 8.5722445e-15, -64.67157, -26.78784, -49.497475, -49.497475, -26.78784, -64.67157)
 script = ExtResource("1_vuocu")
@@ -22,7 +22,7 @@ size = Vector2(140, 140)
 resolution = 16
 star_inner_radius = 0.5
 
-[node name="Wood_Plank_Line_Left" type="Polygon2D" parent="." unique_id=1436508419]
+[node name="Wood_Plank_Line_Left" type="Polygon2D" parent="." unique_id=1695741532]
 position = Vector2(-25, 0)
 color = Color(0.2901961, 0.1882353, 0.15686275, 1)
 polygon = PackedVector2Array(-2, -65, 2, -65, 2, 65, -2, 65)
@@ -31,7 +31,7 @@ size = Vector2(4, 130)
 resolution = 16
 star_inner_radius = 0.5
 
-[node name="Wood_Plank_Line_Right" type="Polygon2D" parent="." unique_id=1638098949]
+[node name="Wood_Plank_Line_Right" type="Polygon2D" parent="." unique_id=1045248956]
 position = Vector2(25, 0)
 color = Color(0.2901961, 0.1882353, 0.15686275, 1)
 polygon = PackedVector2Array(-2, -65, 2, -65, 2, 65, -2, 65)
@@ -40,7 +40,7 @@ size = Vector2(4, 130)
 resolution = 16
 star_inner_radius = 0.5
 
-[node name="Wood_Plank_Line_Center" type="Polygon2D" parent="." unique_id=464345962]
+[node name="Wood_Plank_Line_Center" type="Polygon2D" parent="." unique_id=1351325571]
 color = Color(0.2901961, 0.1882353, 0.15686275, 1)
 polygon = PackedVector2Array(-2, -70, 2, -70, 2, 70, -2, 70)
 script = ExtResource("1_vuocu")
@@ -48,7 +48,7 @@ size = Vector2(4, 140)
 resolution = 16
 star_inner_radius = 0.5
 
-[node name="Metal_Center_Ring" type="Polygon2D" parent="." unique_id=1361931646]
+[node name="Metal_Center_Ring" type="Polygon2D" parent="." unique_id=2079164205]
 color = Color(0.47843137, 0.5176471, 0.5647059, 1)
 polygon = PackedVector2Array(1.7144489e-15, -28, 10.715137, -25.868628, 19.79899, -19.79899, 25.868628, -10.715137, 28, 0, 25.868628, 10.715137, 19.79899, 19.79899, 10.715137, 25.868628, 1.7144489e-15, 28, -10.715137, 25.868628, -19.79899, 19.79899, -25.868628, 10.715137, -28, 3.4288978e-15, -25.868628, -10.715137, -19.79899, -19.79899, -10.715137, -25.868628)
 script = ExtResource("1_vuocu")
@@ -57,7 +57,7 @@ size = Vector2(56, 56)
 resolution = 16
 star_inner_radius = 0.5
 
-[node name="Metal_Center_Boss" type="Polygon2D" parent="." unique_id=103814446]
+[node name="Metal_Center_Boss" type="Polygon2D" parent="." unique_id=1857799978]
 color = Color(0.6039216, 0.6431373, 0.6901961, 1)
 polygon = PackedVector2Array(1.347067e-15, -22, 8.419036, -20.32535, 15.556349, -15.556349, 20.32535, -8.419036, 22, 0, 20.32535, 8.419036, 15.556349, 15.556349, 8.419036, 20.32535, 1.347067e-15, 22, -8.419036, 20.32535, -15.556349, 15.556349, -20.32535, 8.419036, -22, 2.694134e-15, -20.32535, -8.419036, -15.556349, -15.556349, -8.419036, -20.32535)
 script = ExtResource("1_vuocu")
@@ -66,7 +66,7 @@ size = Vector2(44, 44)
 resolution = 16
 star_inner_radius = 0.5
 
-[node name="Rivet_North" type="Polygon2D" parent="." unique_id=1751823241]
+[node name="Rivet_North" type="Polygon2D" parent="." unique_id=361343521]
 position = Vector2(0, -74)
 color = Color(0.2901961, 0.32156864, 0.3529412, 1)
 polygon = PackedVector2Array(2.4492127e-16, -4, 1.5307337, -3.695518, 2.828427, -2.828427, 3.695518, -1.5307337, 4, 0, 3.695518, 1.5307337, 2.828427, 2.828427, 1.5307337, 3.695518, 2.4492127e-16, 4, -1.5307337, 3.695518, -2.828427, 2.828427, -3.695518, 1.5307337, -4, 4.8984254e-16, -3.695518, -1.5307337, -2.828427, -2.828427, -1.5307337, -3.695518)
@@ -76,7 +76,7 @@ size = Vector2(8, 8)
 resolution = 16
 star_inner_radius = 0.5
 
-[node name="Rivet_South" type="Polygon2D" parent="." unique_id=540408633]
+[node name="Rivet_South" type="Polygon2D" parent="." unique_id=1483802459]
 position = Vector2(0, 74)
 color = Color(0.2901961, 0.32156864, 0.3529412, 1)
 polygon = PackedVector2Array(2.4492127e-16, -4, 1.5307337, -3.695518, 2.828427, -2.828427, 3.695518, -1.5307337, 4, 0, 3.695518, 1.5307337, 2.828427, 2.828427, 1.5307337, 3.695518, 2.4492127e-16, 4, -1.5307337, 3.695518, -2.828427, 2.828427, -3.695518, 1.5307337, -4, 4.8984254e-16, -3.695518, -1.5307337, -2.828427, -2.828427, -1.5307337, -3.695518)
@@ -86,7 +86,7 @@ size = Vector2(8, 8)
 resolution = 16
 star_inner_radius = 0.5
 
-[node name="Rivet_East" type="Polygon2D" parent="." unique_id=1503241930]
+[node name="Rivet_East" type="Polygon2D" parent="." unique_id=1935727847]
 position = Vector2(74, 0)
 color = Color(0.2901961, 0.32156864, 0.3529412, 1)
 polygon = PackedVector2Array(2.4492127e-16, -4, 1.5307337, -3.695518, 2.828427, -2.828427, 3.695518, -1.5307337, 4, 0, 3.695518, 1.5307337, 2.828427, 2.828427, 1.5307337, 3.695518, 2.4492127e-16, 4, -1.5307337, 3.695518, -2.828427, 2.828427, -3.695518, 1.5307337, -4, 4.8984254e-16, -3.695518, -1.5307337, -2.828427, -2.828427, -1.5307337, -3.695518)
@@ -96,7 +96,7 @@ size = Vector2(8, 8)
 resolution = 16
 star_inner_radius = 0.5
 
-[node name="Rivet_West" type="Polygon2D" parent="." unique_id=138707645]
+[node name="Rivet_West" type="Polygon2D" parent="." unique_id=2035479155]
 position = Vector2(-74, 0)
 color = Color(0.2901961, 0.32156864, 0.3529412, 1)
 polygon = PackedVector2Array(2.4492127e-16, -4, 1.5307337, -3.695518, 2.828427, -2.828427, 3.695518, -1.5307337, 4, 0, 3.695518, 1.5307337, 2.828427, 2.828427, 1.5307337, 3.695518, 2.4492127e-16, 4, -1.5307337, 3.695518, -2.828427, 2.828427, -3.695518, 1.5307337, -4, 4.8984254e-16, -3.695518, -1.5307337, -2.828427, -2.828427, -1.5307337, -3.695518)
@@ -106,7 +106,7 @@ size = Vector2(8, 8)
 resolution = 16
 star_inner_radius = 0.5
 
-[node name="Rivet_NE" type="Polygon2D" parent="." unique_id=1262633953]
+[node name="Rivet_NE" type="Polygon2D" parent="." unique_id=1384998857]
 position = Vector2(52, -52)
 color = Color(0.2901961, 0.32156864, 0.3529412, 1)
 polygon = PackedVector2Array(2.4492127e-16, -4, 1.5307337, -3.695518, 2.828427, -2.828427, 3.695518, -1.5307337, 4, 0, 3.695518, 1.5307337, 2.828427, 2.828427, 1.5307337, 3.695518, 2.4492127e-16, 4, -1.5307337, 3.695518, -2.828427, 2.828427, -3.695518, 1.5307337, -4, 4.8984254e-16, -3.695518, -1.5307337, -2.828427, -2.828427, -1.5307337, -3.695518)
@@ -116,7 +116,7 @@ size = Vector2(8, 8)
 resolution = 16
 star_inner_radius = 0.5
 
-[node name="Rivet_NW" type="Polygon2D" parent="." unique_id=2023955943]
+[node name="Rivet_NW" type="Polygon2D" parent="." unique_id=86402793]
 position = Vector2(-52, -52)
 color = Color(0.2901961, 0.32156864, 0.3529412, 1)
 polygon = PackedVector2Array(2.4492127e-16, -4, 1.5307337, -3.695518, 2.828427, -2.828427, 3.695518, -1.5307337, 4, 0, 3.695518, 1.5307337, 2.828427, 2.828427, 1.5307337, 3.695518, 2.4492127e-16, 4, -1.5307337, 3.695518, -2.828427, 2.828427, -3.695518, 1.5307337, -4, 4.8984254e-16, -3.695518, -1.5307337, -2.828427, -2.828427, -1.5307337, -3.695518)
@@ -126,7 +126,7 @@ size = Vector2(8, 8)
 resolution = 16
 star_inner_radius = 0.5
 
-[node name="Rivet_SE" type="Polygon2D" parent="." unique_id=1730915633]
+[node name="Rivet_SE" type="Polygon2D" parent="." unique_id=1512461142]
 position = Vector2(52, 52)
 color = Color(0.2901961, 0.32156864, 0.3529412, 1)
 polygon = PackedVector2Array(2.4492127e-16, -4, 1.5307337, -3.695518, 2.828427, -2.828427, 3.695518, -1.5307337, 4, 0, 3.695518, 1.5307337, 2.828427, 2.828427, 1.5307337, 3.695518, 2.4492127e-16, 4, -1.5307337, 3.695518, -2.828427, 2.828427, -3.695518, 1.5307337, -4, 4.8984254e-16, -3.695518, -1.5307337, -2.828427, -2.828427, -1.5307337, -3.695518)
@@ -136,7 +136,7 @@ size = Vector2(8, 8)
 resolution = 16
 star_inner_radius = 0.5
 
-[node name="Rivet_SW" type="Polygon2D" parent="." unique_id=439116064]
+[node name="Rivet_SW" type="Polygon2D" parent="." unique_id=639826771]
 position = Vector2(-52, 52)
 color = Color(0.2901961, 0.32156864, 0.3529412, 1)
 polygon = PackedVector2Array(2.4492127e-16, -4, 1.5307337, -3.695518, 2.828427, -2.828427, 3.695518, -1.5307337, 4, 0, 3.695518, 1.5307337, 2.828427, 2.828427, 1.5307337, 3.695518, 2.4492127e-16, 4, -1.5307337, 3.695518, -2.828427, 2.828427, -3.695518, 1.5307337, -4, 4.8984254e-16, -3.695518, -1.5307337, -2.828427, -2.828427, -1.5307337, -3.695518)
