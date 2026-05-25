@@ -455,6 +455,7 @@ The JSON schema must be exactly:
 		{
 			"name": "String",
 			"type": 0,
+			"rotation": 0.0,
 			"size_x": 128.0,
 			"size_y": 128.0,
 			"pivot_offset_x": 0.0,
@@ -476,6 +477,10 @@ Shape type integers are fixed:
 Rules:
 - Output JSON only.
 - Use numeric values for size, position, and pivot offset fields.
+- Use numeric degrees for rotation, where 0.0 means no rotation.
+- Order the nodes array from back to front so earlier nodes draw behind later nodes.
+- Layering matters: build the background, then the body, then front-facing parts like faces, jaws, hands, and details.
+- For posed characters, rotate limbs and necks in the JSON instead of relying on editor-side correction.
 - Keep names short, readable, and valid as scene node names.
 - The output must contain only the requested character or object, isolated in empty space.
 - Do not create background, floor, ground plane, horizon, sky, room, stage, shadow, lighting, or other environment details.
@@ -653,6 +658,7 @@ func _contains_any(source_text: String, keywords: Array) -> bool:
 
 func _normalize_node_spec(raw_node: Dictionary, index: int, used_names: Dictionary) -> Dictionary:
 	var shape_type := _shape_type_from_value(raw_node.get("type", SHAPE_RECTANGLE))
+	var rotation_degrees := float(raw_node.get("rotation", 0.0))
 	var width := float(raw_node.get("size_x", 128.0))
 	var height := float(raw_node.get("size_y", 128.0))
 	var color := _parse_color(raw_node.get("color", "#ffffff"))
@@ -666,6 +672,7 @@ func _normalize_node_spec(raw_node: Dictionary, index: int, used_names: Dictiona
 	return {
 		"name": name,
 		"shape_type": shape_type,
+		"rotation_degrees": rotation_degrees,
 		"size": Vector2(width, height),
 		"color": color,
 		"position": position,
@@ -834,6 +841,7 @@ func _instantiate_smart_polygon(node_spec: Dictionary) -> Polygon2D:
 
 	polygon_node.name = str(node_spec.get("name", "Shape"))
 	polygon_node.position = node_spec.get("position", Vector2.ZERO)
+	polygon_node.rotation_degrees = float(node_spec.get("rotation_degrees", 0.0))
 	polygon_node.color = node_spec.get("color", Color.WHITE)
 	polygon_node.set("shape_type", int(node_spec.get("shape_type", SHAPE_RECTANGLE)))
 	polygon_node.set("size", node_spec.get("size", Vector2(128.0, 128.0)))
