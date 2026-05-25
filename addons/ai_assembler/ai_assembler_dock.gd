@@ -410,35 +410,68 @@ func _serialize_existing_container(container: Node2D) -> String:
 		if polygon_child == null:
 			continue
 
-		var node_spec := {
-			"name": str(polygon_child.name),
-			"type": int(polygon_child.shape_type),
-			"size_x": snappedf(polygon_child.size.x, 0.1),
-			"size_y": snappedf(polygon_child.size.y, 0.1),
-			"pivot_offset_x": snappedf(polygon_child.pivot_offset.x, 0.1),
-			"pivot_offset_y": snappedf(polygon_child.pivot_offset.y, 0.1),
-			"rotation": snappedf(polygon_child.rotation_degrees, 0.1),
-			"resolution": int(polygon_child.resolution),
-			"star_inner_radius": snappedf(polygon_child.star_inner_radius, 0.01),
-			"color": "#" + polygon_child.color.to_html(false),
-			"pos_x": snappedf(polygon_child.position.x, 0.1),
-			"pos_y": snappedf(polygon_child.position.y, 0.1),
-		}
-		nodes_array.append(node_spec)
+		var node_spec := _serialize_node_recursive(polygon_child)
+		if not node_spec.is_empty():
+			nodes_array.append(node_spec)
 
 	var payload := {"nodes": nodes_array}
 	return JSON.stringify(payload, "\t")
 
 
-func _build_nodes_from_spec(node_specs: Array[Dictionary]) -> Array[Node]:
+func _serialize_node_recursive(node: SmartPolygon2D) -> Dictionary:
+	if node == null:
+		return {}
+
+	var children_array: Array[Dictionary] = []
+	for child in node.get_children():
+		if child is SmartPolygon2D:
+			var serialized_child := _serialize_node_recursive(child as SmartPolygon2D)
+			if not serialized_child.is_empty():
+				children_array.append(serialized_child)
+
+	return {
+		"name": str(node.name),
+		"type": int(node.shape_type),
+		"rotation": snappedf(node.rotation_degrees, 0.1),
+		"size_x": snappedf(node.size.x, 0.1),
+		"size_y": snappedf(node.size.y, 0.1),
+		"pivot_offset_x": snappedf(node.pivot_offset.x, 0.1),
+		"pivot_offset_y": snappedf(node.pivot_offset.y, 0.1),
+		"resolution": int(node.resolution),
+		"star_inner_radius": snappedf(node.star_inner_radius, 0.01),
+		"color": "#" + node.color.to_html(false),
+		"pos_x": snappedf(node.position.x, 0.1),
+		"pos_y": snappedf(node.position.y, 0.1),
+		"children": children_array,
+	}
+
+
+func _build_nodes_from_spec(node_specs: Array) -> Array[Node]:
 	var new_nodes: Array[Node] = []
 
 	for node_spec in node_specs:
-		var polygon_node := _instantiate_smart_polygon(node_spec)
-		if polygon_node != null:
-			new_nodes.append(polygon_node)
+		if node_spec is Dictionary:
+			var root_node := _build_node_recursive(node_spec)
+			if root_node != null:
+				new_nodes.append(root_node)
 
 	return new_nodes
+
+
+func _build_node_recursive(node_spec: Dictionary) -> Node:
+	var current_node := _instantiate_smart_polygon(node_spec)
+	if current_node == null:
+		return null
+
+	var children_specs := node_spec.get("children", [])
+	if children_specs is Array:
+		for child_spec in children_specs:
+			if child_spec is Dictionary:
+				var child_node := _build_node_recursive(child_spec)
+				if child_node != null:
+					current_node.add_child(child_node)
+
+	return current_node
 
 
 func _copy_node2d_state(source_node: Node2D, target_node: Node2D) -> void:
@@ -647,7 +680,24 @@ The JSON schema must be exactly:
 			"star_inner_radius": 0.5,
 			"color": "#RRGGBB",
 			"pos_x": 0.0,
-			"pos_y": 0.0
+			"pos_y": 0.0,
+			"children": [
+				{
+					"name": "String",
+					"type": 0,
+					"rotation": 0.0,
+					"size_x": 128.0,
+					"size_y": 128.0,
+					"pivot_offset_x": 0.0,
+					"pivot_offset_y": 0.0,
+					"resolution": 16,
+					"star_inner_radius": 0.5,
+					"color": "#RRGGBB",
+					"pos_x": 0.0,
+					"pos_y": 0.0,
+					"children": []
+				}
+			]
 		}
 	]
 }
@@ -663,6 +713,13 @@ Rules:
 - Output JSON only.
 - Use numeric values for size, position, and pivot offset fields.
 - Use numeric degrees for rotation, where 0.0 means no rotation.
+- Nodes may recursively contain a "children" array, and each child may contain its own nested children.
+- CRITICAL HIERARCHY AND LOCAL COORDINATE RULES:
+- When a node is inside a "children" array, its pos_x and pos_y are LOCAL coordinates relative to the parent's origin (0,0).
+- If a parent node has no pivot_offset, its local (0,0) is its exact geometric center. (e.g., A head circle. Eyes should be placed near pos_x: -15, pos_y: -10).
+- If a parent node HAS a pivot_offset, its local (0,0) is located at that pivot point.
+- EXAMPLE: An Upper Arm capsule has size_y: 100, and a pivot_offset_y: -50 (pivot at the top shoulder). The local (0,0) is the shoulder. To attach a Forearm child to the elbow, the Forearm's local pos_y must be 100 (the full length of the parent), NOT 50.
+- EXAMPLE: A Torso capsule has size_y: 120 and NO pivot_offset (origin is dead center). To attach legs to the bottom, the Leg children need a local pos_y of 60. To attach a head to the top, the Head child needs a local pos_y of -60.
 - Order the nodes array from back to front so earlier nodes draw behind later nodes.
 - Layering matters: build the background, then the body, then front-facing parts like faces, jaws, hands, and details.
 - For posed characters, rotate limbs and necks in the JSON instead of relying on editor-side correction.
@@ -690,6 +747,7 @@ Rules:
 - For vertical leg segments, a common pivot_offset is [0, -size_y / 2] so the joint sits at the top edge.
 - The editor plugin does not apply humanoid pose correction after generation, so the JSON must already contain the final layout.
 - For multi-node subjects, keep the node set focused on the subject anatomy or object parts only.
+- When editing an existing asset, preserve the recursive children hierarchy and update nested nodes in place when possible.
 - Prefer more complex shapes when they improve the composition, especially capsules and triangles.
 - Use triangles for spikes, arrows, accents, and details that would be difficult to achieve with circles or rectangles, especially when conveying sharp points.
 
@@ -705,6 +763,7 @@ INSTRUCTIONS FOR EDITING:
 Modify the JSON above to fulfill the user's request.
 - You may change sizes, colors, rotations, positions, pivot offsets, resolutions, and star inner radii of existing nodes.
 - You may add new nodes or delete nodes if necessary.
+- You may also add, remove, or reorganize nested children arrays when that better matches the requested structure.
 - Keep the names of unmodified nodes exactly the same.
 - Return the full updated JSON object, not a diff.
 """ % existing_json
@@ -798,8 +857,8 @@ func _extract_node_specs(schema_payload: Dictionary) -> Array[Dictionary]:
 	if raw_nodes is not Array:
 		return node_specs
 
-	var raw_node_array := raw_nodes as Array
 	var used_names := {}
+	var raw_node_array := raw_nodes as Array
 
 	for index in range(raw_node_array.size()):
 		var raw_node = raw_node_array[index]
@@ -808,6 +867,18 @@ func _extract_node_specs(schema_payload: Dictionary) -> Array[Dictionary]:
 			node_specs.append(normalized_spec)
 
 	return node_specs
+
+
+func _normalize_node_spec_array(raw_nodes: Array, used_names: Dictionary) -> Array[Dictionary]:
+	var normalized_nodes: Array[Dictionary] = []
+
+	for index in range(raw_nodes.size()):
+		var raw_node = raw_nodes[index]
+		if raw_node is Dictionary:
+			var normalized_spec := _normalize_node_spec(raw_node as Dictionary, index, used_names)
+			normalized_nodes.append(normalized_spec)
+
+	return normalized_nodes
 
 
 func _filter_subject_nodes(node_specs: Array[Dictionary], user_prompt: String) -> Array[Dictionary]:
@@ -871,6 +942,10 @@ func _normalize_node_spec(raw_node: Dictionary, index: int, used_names: Dictiona
 		pivot_offset = _vector2_from_value(raw_node.get("pivot_offset"), pivot_offset)
 	var name := _make_unique_node_name(str(raw_node.get("name", "")), index, used_names)
 	var star_inner_radius := clampf(float(raw_node.get("star_inner_radius", 0.5)), 0.0, 0.95)
+	var children_specs: Array[Dictionary] = []
+	var raw_children := raw_node.get("children", [])
+	if raw_children is Array:
+		children_specs = _normalize_node_spec_array(raw_children as Array, used_names)
 
 	return {
 		"name": name,
@@ -881,6 +956,7 @@ func _normalize_node_spec(raw_node: Dictionary, index: int, used_names: Dictiona
 		"position": position,
 		"pivot_offset": pivot_offset,
 		"star_inner_radius": star_inner_radius,
+		"children": children_specs,
 	}
 
 
